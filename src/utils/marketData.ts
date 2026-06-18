@@ -7,51 +7,22 @@ export interface KLineResult {
   volume: number;
 }
 
-export type DataSource = 'binance' | 'binance_us' | 'kraken';
-
-export const DATA_SOURCES: { value: DataSource; label: string }[] = [
-  { value: 'binance', label: 'Binance' },
-  { value: 'binance_us', label: 'Binance US' },
-  { value: 'kraken', label: 'Kraken' },
-];
+export interface Ticker24hrResult {
+  symbol: string;
+  lastPrice: string;
+  priceChange: string;
+  priceChangePercent: string;
+  highPrice: string;
+  lowPrice: string;
+  volume: string;
+  quoteVolume: string;
+}
 
 // Binance kline format: [openTime, open, high, low, close, volume, closeTime, ...]
 type BinanceKline = [number, string, string, string, string, string, number, string, number, string, string, string];
 
-// Kraken symbol mapping (Kraken uses XBT instead of BTC, USD instead of USDT)
-const KRAKEN_SYMBOL_MAP: Record<string, string> = {
-  BTCUSDT: 'XBTUSD',
-  ETHUSDT: 'ETHUSD',
-  SOLUSDT: 'SOLUSD',
-  BNBUSDT: 'BNBUSD',
-  XRPUSDT: 'XRPUSD',
-  ADAUSDT: 'ADAUSD',
-  DOGEUSDT: 'XDGUSD',
-  AVAXUSDT: 'AVAXUSD',
-  RVNUSDT: 'RVNUSD',
-};
-
-// Map our interval strings to each exchange's format
-function mapIntervalBinance(interval: string): string {
-  return interval; // already in Binance format (1m, 5m, 15m, 1h, 4h, 1d, 1w)
-}
-
-function mapIntervalKraken(interval: string): number {
-  const map: Record<string, number> = {
-    '1m': 1,
-    '5m': 5,
-    '15m': 15,
-    '1h': 60,
-    '4h': 240,
-    '1d': 1440,
-    '1w': 10080,
-  };
-  return map[interval] ?? 1440;
-}
-
-async function fetchBinance(base: string, symbol: string, interval: string, limit: number): Promise<KLineResult[]> {
-  const bi = mapIntervalBinance(interval);
-  const url = `${base}/api/v3/klines?symbol=${symbol}&interval=${bi}&limit=${limit}`;
+async function fetchBinanceUiKlines(symbol: string, interval: string, limit: number): Promise<KLineResult[]> {
+  const url = `https://data-api.binance.vision/api/v3/uiKlines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
   const data: BinanceKline[] = await response.json();
@@ -66,37 +37,15 @@ async function fetchBinance(base: string, symbol: string, interval: string, limi
   }));
 }
 
-interface KrakenResponse {
-  result: Record<string, [number, string, string, string, string, string, string, number][]>;
-}
-
-async function fetchKraken(symbol: string, interval: string, limit: number): Promise<KLineResult[]> {
-  const krakenSymbol = KRAKEN_SYMBOL_MAP[symbol] ?? symbol.replace('USDT', 'USD');
-  const krakenInterval = mapIntervalKraken(interval);
-  // Kraken returns up to 720 candles per request
-  const url = `https://api.kraken.com/0/public/OHLC?pair=${krakenSymbol}&interval=${krakenInterval}`;
+export async function fetch24hrTicker(symbol: string): Promise<Ticker24hrResult> {
+  const url = `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${symbol}`;
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Kraken API error: ${response.status} ${response.statusText}`);
-  const data: KrakenResponse = await response.json();
-  const pairKey = Object.keys(data.result).find(k => k !== 'last');
-  if (!pairKey) throw new Error('Kraken API returned no data');
-  const candles = data.result[pairKey];
-  // Kraken timestamps are in seconds, convert to ms; sort ascending; take last `limit`
-  return candles
-    .map((c) => ({
-      timestamp: c[0] * 1000,
-      open: parseFloat(c[1]),
-      high: parseFloat(c[2]),
-      low: parseFloat(c[3]),
-      close: parseFloat(c[4]),
-      volume: parseFloat(c[6]),
-    }))
-    .sort((a, b) => a.timestamp - b.timestamp)
-    .slice(-limit);
+  if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+  const data: Ticker24hrResult = await response.json();
+  return data;
 }
 
 export async function fetchHistoricalData(
-  source: DataSource,
   symbol: string,
   interval: string,
   limit: number = 1000
@@ -105,20 +54,7 @@ export async function fetchHistoricalData(
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    let result: KLineResult[];
-    switch (source) {
-      case 'binance':
-        result = await fetchBinance('https://data-api.binance.vision', symbol, interval, limit);
-        break;
-      case 'binance_us':
-        result = await fetchBinance('https://api.binance.us', symbol, interval, limit);
-        break;
-      case 'kraken':
-        result = await fetchKraken(symbol, interval, limit);
-        break;
-      default:
-        throw new Error(`Unknown data source: ${source}`);
-    }
+    const result = await fetchBinanceUiKlines(symbol, interval, limit);
     return result;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {

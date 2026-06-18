@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { init, dispose, registerIndicator } from 'klinecharts';
 import type { Chart, LineType, CandleType } from 'klinecharts';
-import { fetchHistoricalData, DATA_SOURCES } from '../utils/marketData';
-import type { DataSource } from '../utils/marketData';
+import { fetchHistoricalData, fetch24hrTicker } from '../utils/marketData';
+import type { Ticker24hrResult } from '../utils/marketData';
 import { rainbowMaIndicator } from '../indicators/rainbowMa';
 import { cdcActionZoneIndicator } from '../indicators/cdcActionZone';
 
@@ -32,7 +32,7 @@ const INTERVALS = [
   { value: '1w', label: '1W' },
 ];
 
-const selectClass = "bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer";
+const selectClass = "bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer hover:border-[#4B5563] transition-colors";
 
 export default function MarketChart() {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ export default function MarketChart() {
   const [error, setError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeInterval, setTimeInterval] = useState('1d');
-  const [source, setSource] = useState<DataSource>('binance');
+  const [ticker, setTicker] = useState<Ticker24hrResult | null>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -90,8 +90,12 @@ export default function MarketChart() {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchHistoricalData(source, symbol, timeInterval, 1000);
-        chartInstance.current.applyNewData(data);
+        const [historicalData, tickerData] = await Promise.all([
+          fetchHistoricalData(symbol, timeInterval, 1000),
+          fetch24hrTicker(symbol)
+        ]);
+        chartInstance.current.applyNewData(historicalData);
+        setTicker(tickerData);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load chart data';
         console.error(message, err);
@@ -103,43 +107,75 @@ export default function MarketChart() {
 
     const debounceTimer = setTimeout(loadData, 400);
     return () => clearTimeout(debounceTimer);
-  }, [source, symbol, timeInterval]);
+  }, [symbol, timeInterval]);
+
+  const formatPrice = (priceStr: string) => {
+    const price = parseFloat(priceStr);
+    return price < 1 ? price.toPrecision(4) : price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const isPositive = ticker ? parseFloat(ticker.priceChangePercent) >= 0 : true;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div className="absolute top-4 left-4 z-10 flex gap-2 flex-wrap">
-        <select
-          className={selectClass}
-          value={source}
-          onChange={e => setSource(e.target.value as DataSource)}
-          aria-label="Select data source"
-        >
-          {DATA_SOURCES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }} className="flex flex-col bg-[#131722]">
+      {/* Top Navigation & Ticker */}
+      <div className="absolute top-4 left-4 z-10 flex gap-4 items-center">
+        <div className="flex gap-2">
+          <select
+            className={selectClass}
+            value={symbol}
+            onChange={e => setSymbol(e.target.value)}
+            aria-label="Select trading pair"
+          >
+            {SYMBOLS.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
 
-        <select
-          className={selectClass}
-          value={symbol}
-          onChange={e => setSymbol(e.target.value)}
-          aria-label="Select trading pair"
-        >
-          {SYMBOLS.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+          <select
+            className={selectClass}
+            value={timeInterval}
+            onChange={e => setTimeInterval(e.target.value)}
+            aria-label="Select timeframe"
+          >
+            {INTERVALS.map(t => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </div>
 
-        <select
-          className={selectClass}
-          value={timeInterval}
-          onChange={e => setTimeInterval(e.target.value)}
-          aria-label="Select timeframe"
-        >
-          {INTERVALS.map(t => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
+        {/* 24h Ticker Display */}
+        {ticker && (
+          <div className="flex items-center gap-6 bg-[#1E222D]/80 backdrop-blur-md border border-[#333843] rounded px-4 py-1.5 text-sm">
+            <div className="flex flex-col">
+              <span className={`text-base font-semibold ${isPositive ? 'text-[#26A69A]' : 'text-[#EF5350]'}`}>
+                {formatPrice(ticker.lastPrice)}
+              </span>
+            </div>
+            
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500">24h Change</span>
+              <span className={`font-medium ${isPositive ? 'text-[#26A69A]' : 'text-[#EF5350]'}`}>
+                {isPositive ? '+' : ''}{parseFloat(ticker.priceChange).toFixed(2)} ({parseFloat(ticker.priceChangePercent).toFixed(2)}%)
+              </span>
+            </div>
+            
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500">24h High</span>
+              <span className="text-gray-200 font-medium">{formatPrice(ticker.highPrice)}</span>
+            </div>
+            
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500">24h Low</span>
+              <span className="text-gray-200 font-medium">{formatPrice(ticker.lowPrice)}</span>
+            </div>
+            
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500">24h Vol ({symbol.replace('USDT', '')})</span>
+              <span className="text-gray-200 font-medium">{parseFloat(ticker.volume).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading && (
@@ -152,12 +188,12 @@ export default function MarketChart() {
       )}
 
       {error && !loading && (
-        <div style={{ position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'rgba(239, 83, 80, 0.15)', border: '1px solid #EF5350', borderRadius: 8, padding: '12px 20px', color: '#EF5350', fontSize: 14, maxWidth: 400, textAlign: 'center' }}>
+        <div style={{ position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'rgba(239, 83, 80, 0.15)', border: '1px solid #EF5350', borderRadius: 8, padding: '12px 20px', color: '#EF5350', fontSize: 14, maxWidth: 400, textAlign: 'center' }}>
           {error}
         </div>
       )}
 
-      <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={chartRef} style={{ width: '100%', height: '100%', paddingTop: ticker ? '60px' : '0px' }} />
     </div>
   );
 }
