@@ -137,6 +137,14 @@ export const rainbowMaIndicator = {
       dashedValue: []
     }))
   },
+  createTooltipDataSource: ({ indicator }: any) => {
+    return {
+      name: indicator.name,
+      calcParamsText: '',
+      icons: [],
+      values: []
+    };
+  },
   calc: (dataList: KLineData[], indicator: any) => {
     const { calcParams } = indicator;
     const length = Number(calcParams[0]);
