@@ -1,56 +1,6 @@
-import type { KLineData } from 'klinecharts';
+import type { KLineData, Indicator, IndicatorCreateTooltipDataSourceParams } from 'klinecharts';
 import { LineType } from 'klinecharts';
-
-export function calculateSma(dataList: KLineData[], period: number) {
-  const result: (number | null)[] = [];
-  let sum = 0;
-  for (let i = 0; i < dataList.length; i++) {
-    const val = dataList[i].close;
-    sum += val;
-    if (i >= period - 1) {
-      if (i >= period) {
-        sum -= dataList[i - period].close;
-      }
-      result.push(sum / period);
-    } else {
-      result.push(null);
-    }
-  }
-  return result;
-}
-
-export function calculateEma(dataList: KLineData[], period: number) {
-  const result: (number | null)[] = [];
-  const k = 2 / (period + 1);
-  let ema: number | null = null;
-  for (let i = 0; i < dataList.length; i++) {
-    const val = dataList[i].close;
-    if (i === 0) {
-      ema = val;
-    } else if (ema !== null) {
-      ema = val * k + ema * (1 - k);
-    }
-    result.push(ema);
-  }
-  return result;
-}
-
-export function calculateWma(dataList: KLineData[], period: number) {
-  const result: (number | null)[] = [];
-  const denominator = (period * (period + 1)) / 2;
-  for (let i = 0; i < dataList.length; i++) {
-    if (i >= period - 1) {
-      let sum = 0;
-      for (let j = 0; j < period; j++) {
-        sum += dataList[i - j].close * (period - j);
-      }
-      result.push(sum / denominator);
-    } else {
-      result.push(null);
-    }
-  }
-  return result;
-}
+import { calculateSma, calculateEma, calculateWma } from './maUtils';
 
 const colors = [
   'rgba(255, 0, 0, 1)',      // sma1
@@ -119,6 +69,8 @@ const colors = [
   'rgba(255, 0, 255, 1)'     // sma64
 ];
 
+type RainbowData = Record<string, number | null>;
+
 export const rainbowMaIndicator = {
   name: 'RainbowMA',
   shortName: 'Rainbow MA',
@@ -137,7 +89,7 @@ export const rainbowMaIndicator = {
       dashedValue: []
     }))
   },
-  createTooltipDataSource: ({ indicator }: any) => {
+  createTooltipDataSource: ({ indicator }: IndicatorCreateTooltipDataSourceParams<RainbowData>) => {
     return {
       name: indicator.name,
       calcParamsText: '',
@@ -145,7 +97,7 @@ export const rainbowMaIndicator = {
       values: []
     };
   },
-  calc: (dataList: KLineData[], indicator: any) => {
+  calc: (dataList: KLineData[], indicator: Indicator<RainbowData>): RainbowData[] => {
     const { calcParams } = indicator;
     const length = Number(calcParams[0]);
     const start = Number(calcParams[1]);
@@ -168,7 +120,7 @@ export const rainbowMaIndicator = {
     }
 
     return dataList.map((_, i) => {
-      const obj: Record<string, number | null> = {};
+      const obj: RainbowData = {};
       for (let c = 0; c < maNumber; c++) {
         obj[`ma${c + 1}`] = maArrays[c][i];
       }

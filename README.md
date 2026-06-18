@@ -1,73 +1,51 @@
-# React + TypeScript + Vite
+# TradeHard Pro
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Cryptocurrency trading chart application with Rainbow MA (64-line moving average rainbow) and CDC ActionZone indicators.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19 + TypeScript 6 + Vite 8
+- klinecharts 9.3.0 for chart rendering
+- Binance public API for market data
+- Deployed via GitHub Pages
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Rainbow MA**: 64 moving averages (SMA/EMA/WMA selectable) rendered as a rainbow gradient
+- **CDC ActionZone**: Colored bar indicator showing bull/bear momentum zones (Green/Blue/LBlue/Red/Orange/Yellow)
+- Multiple trading pairs (BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, RVN)
+- Multiple timeframes (1m → 1W)
+- Dark theme matching TradingView aesthetics
+- Error handling with user-facing error display
+- Request timeout (15s) with abort controller
 
-## Expanding the ESLint configuration
+## Development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm install
+pnpm dev        # Start dev server
+pnpm build      # Type-check + production build
+pnpm lint       # ESLint
+pnpm preview    # Preview production build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Architecture
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+  App.tsx                    # Root component, full-screen dark container
+  main.tsx                   # React entry point
+  index.css                  # Global styles, dark theme, responsive
+  components/
+    MarketChart.tsx          # Chart init, data loading, UI controls
+  indicators/
+    maUtils.ts               # Shared MA calculations (SMA, EMA, WMA)
+    rainbowMa.ts             # RainbowMA indicator (64 MA lines)
+    cdcActionZone.ts         # CDC ActionZone indicator (colored bars)
+  utils/
+    binanceApi.ts            # Binance klines API with timeout + error handling
+```
+
+## Deployment
+
+Push to `main` branch triggers GitHub Actions workflow that builds and deploys to GitHub Pages.

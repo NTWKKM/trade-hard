@@ -133,3 +133,17 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Responsive: smaller controls on mobile */
+@media (max-width: 640px) {
+  .absolute.top-4.left-4 {
+    top: 8px;
+    left: 8px;
+    gap: 4px;
+  }
+
+  .absolute.top-4.left-4 select {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}

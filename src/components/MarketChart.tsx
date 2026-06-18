@@ -5,16 +5,39 @@ import { fetchHistoricalData } from '../utils/binanceApi';
 import { rainbowMaIndicator } from '../indicators/rainbowMa';
 import { cdcActionZoneIndicator } from '../indicators/cdcActionZone';
 
-// Register our custom indicator globally
+// Register our custom indicators globally
 registerIndicator(rainbowMaIndicator);
 registerIndicator(cdcActionZoneIndicator);
+
+const SYMBOLS = [
+  { value: 'BTCUSDT', label: 'BTC/USDT' },
+  { value: 'ETHUSDT', label: 'ETH/USDT' },
+  { value: 'SOLUSDT', label: 'SOL/USDT' },
+  { value: 'BNBUSDT', label: 'BNB/USDT' },
+  { value: 'XRPUSDT', label: 'XRP/USDT' },
+  { value: 'ADAUSDT', label: 'ADA/USDT' },
+  { value: 'DOGEUSDT', label: 'DOGE/USDT' },
+  { value: 'AVAXUSDT', label: 'AVAX/USDT' },
+  { value: 'RVNUSDT', label: 'RVN/USDT' },
+];
+
+const INTERVALS = [
+  { value: '1m', label: '1m' },
+  { value: '5m', label: '5m' },
+  { value: '15m', label: '15m' },
+  { value: '1h', label: '1h' },
+  { value: '4h', label: '4h' },
+  { value: '1d', label: '1D' },
+  { value: '1w', label: '1W' },
+];
 
 export default function MarketChart() {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<Chart | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState('BTCUSDT');
-  const [interval, setInterval] = useState('1d');
+  const [timeInterval, setTimeInterval] = useState('1d');
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -43,17 +66,21 @@ export default function MarketChart() {
     });
 
     chartInstance.current = chart;
-    
-    // Add Custom Indicator to the main candle pane
-    chart?.createIndicator('RainbowMA', false, { id: 'candle_pane' });
-    // Add CDC ActionZone to a new pane at the bottom
-    chart?.createIndicator('CDCActionZone', false, { id: 'cdc_pane', height: 40 });
 
-    // Cleanup
+    if (chart) {
+      // Add Custom Indicator to the main candle pane
+      chart.createIndicator('RainbowMA', false, { id: 'candle_pane' });
+      // Add CDC ActionZone to a new pane at the bottom
+      chart.createIndicator('CDCActionZone', false, { id: 'cdc_pane', height: 40 });
+    }
+
+    // Cleanup — capture ref to avoid stale closure
+    const container = chartRef.current;
     return () => {
-      if (chartRef.current) {
-        dispose(chartRef.current);
+      if (container) {
+        dispose(container);
       }
+      chartInstance.current = null;
     };
   }, []);
 
@@ -61,43 +88,45 @@ export default function MarketChart() {
     const loadData = async () => {
       if (!chartInstance.current) return;
       setLoading(true);
+      setError(null);
       try {
-        const data = await fetchHistoricalData(symbol, interval, 1000);
+        const data = await fetchHistoricalData(symbol, timeInterval, 1000);
         chartInstance.current.applyNewData(data);
-      } catch (error) {
-        console.error("Failed to load chart data", error);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load chart data';
+        console.error(message, err);
+        setError(message);
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [symbol, interval]);
+  }, [symbol, timeInterval]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div className="absolute top-4 left-4 z-10 flex gap-2">
-        <select 
+      <div className="absolute top-4 left-4 z-10 flex gap-2 flex-wrap">
+        <select
           className="bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer"
           value={symbol}
           onChange={e => setSymbol(e.target.value)}
+          aria-label="Select trading pair"
         >
-          <option value="BTCUSDT">BTC/USDT</option>
-          <option value="RVNUSDT">RVN/USDT</option>
+          {SYMBOLS.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
         </select>
-        
-        <select 
+
+        <select
           className="bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer"
-          value={interval}
-          onChange={e => setInterval(e.target.value)}
+          value={timeInterval}
+          onChange={e => setTimeInterval(e.target.value)}
+          aria-label="Select timeframe"
         >
-          <option value="1m">1m</option>
-          <option value="5m">5m</option>
-          <option value="15m">15m</option>
-          <option value="1h">1h</option>
-          <option value="4h">4h</option>
-          <option value="1d">1D</option>
-          <option value="1w">1W</option>
+          {INTERVALS.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
         </select>
       </div>
 
@@ -109,6 +138,13 @@ export default function MarketChart() {
           </div>
         </div>
       )}
+
+      {error && !loading && (
+        <div style={{ position: 'absolute', top: 60, left: '50%', transform: 'translateX(-50%)', zIndex: 5, background: 'rgba(239, 83, 80, 0.15)', border: '1px solid #EF5350', borderRadius: 8, padding: '12px 20px', color: '#EF5350', fontSize: 14, maxWidth: 400, textAlign: 'center' }}>
+          {error}
+        </div>
+      )}
+
       <div ref={chartRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );

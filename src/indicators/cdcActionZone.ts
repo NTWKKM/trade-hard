@@ -1,20 +1,22 @@
-import type { KLineData } from 'klinecharts';
+import type { KLineData, Indicator, IndicatorCreateTooltipDataSourceParams } from 'klinecharts';
+import { calculateEma } from './maUtils';
 
-export function calculateEma(dataList: KLineData[], period: number) {
-  const result: (number | null)[] = [];
-  const k = 2 / (period + 1);
-  let ema: number | null = null;
-  for (let i = 0; i < dataList.length; i++) {
-    const val = dataList[i].close;
-    if (i === 0) {
-      ema = val;
-    } else if (ema !== null) {
-      ema = val * k + ema * (1 - k);
-    }
-    result.push(ema);
-  }
-  return result;
+type CdcColor = 'Black' | 'Green' | 'Blue' | 'LBlue' | 'Red' | 'Orange' | 'Yellow';
+
+interface CdcData {
+  signal: number;
+  color: CdcColor;
 }
+
+const COLOR_MAP: Record<CdcColor, string> = {
+  Black: 'rgba(136, 136, 136, 0.3)',
+  Green: '#00E676',
+  Blue: '#2962FF',
+  LBlue: '#00B0FF',
+  Red: '#FF5252',
+  Orange: '#FF9100',
+  Yellow: '#FFEB3B',
+};
 
 export const cdcActionZoneIndicator = {
   name: 'CDCActionZone',
@@ -26,23 +28,14 @@ export const cdcActionZoneIndicator = {
       title: 'ActionZone',
       type: 'bar',
       baseValue: 0,
-      styles: ({ current }: any) => {
+      styles: ({ current }: { current: { indicatorData?: CdcData } }) => {
         const data = current?.indicatorData;
         if (!data) return {};
-        
-        let color = 'rgba(0,0,0,0)';
-        if (data.color === 'Green') color = '#00E676';
-        else if (data.color === 'Blue') color = '#2962FF';
-        else if (data.color === 'LBlue') color = '#00B0FF';
-        else if (data.color === 'Red') color = '#FF5252';
-        else if (data.color === 'Orange') color = '#FF9100';
-        else if (data.color === 'Yellow') color = '#FFEB3B';
-        
-        return { color };
+        return { color: COLOR_MAP[data.color] ?? COLOR_MAP.Black };
       }
     }
   ],
-  createTooltipDataSource: ({ indicator }: any) => {
+  createTooltipDataSource: ({ indicator }: IndicatorCreateTooltipDataSourceParams<CdcData>) => {
     return {
       name: indicator.name,
       calcParamsText: '',
@@ -50,7 +43,7 @@ export const cdcActionZoneIndicator = {
       values: []
     };
   },
-  calc: (dataList: KLineData[], indicator: any) => {
+  calc: (dataList: KLineData[], indicator: Indicator<CdcData>): CdcData[] => {
     const { calcParams } = indicator;
     const fastPeriod = Number(calcParams[0]);
     const slowPeriod = Number(calcParams[1]);
@@ -64,13 +57,13 @@ export const cdcActionZoneIndicator = {
       const sEma = slowEma[i];
 
       if (fEma === null || sEma === null) {
-        return { signal: 0, color: 'Black' };
+        return { signal: 0, color: 'Black' as CdcColor };
       }
 
       const Bull = fEma > sEma;
       const Bear = fEma < sEma;
 
-      let color = 'Black';
+      let color: CdcColor = 'Black';
       if (Bull && xPrice > fEma) color = 'Green';
       else if (Bear && xPrice > fEma && xPrice > sEma) color = 'Blue';
       else if (Bear && xPrice > fEma && xPrice < sEma) color = 'LBlue';
@@ -78,7 +71,10 @@ export const cdcActionZoneIndicator = {
       else if (Bull && xPrice < fEma && xPrice < sEma) color = 'Orange';
       else if (Bull && xPrice < fEma && xPrice > sEma) color = 'Yellow';
 
-      return { signal: 1, color };
+      // Signal magnitude: distance between fast and slow EMA (normalized)
+      const signal = fEma !== null && sEma !== null ? fEma - sEma : 0;
+
+      return { signal, color };
     });
   }
 };
