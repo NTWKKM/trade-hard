@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { init, dispose, registerIndicator, LineType, CandleType } from 'klinecharts';
-import type { Chart } from 'klinecharts';
+import { init, dispose, registerIndicator } from 'klinecharts';
+import type { Chart, LineType, CandleType } from 'klinecharts';
 import { fetchHistoricalData, DATA_SOURCES } from '../utils/marketData';
 import type { DataSource } from '../utils/marketData';
 import { rainbowMaIndicator } from '../indicators/rainbowMa';
@@ -48,9 +48,9 @@ export default function MarketChart() {
 
     const chart = init(chartRef.current, {
       styles: {
-        grid: { show: true, horizontal: { color: '#1E222D', size: 1, style: LineType.Dashed }, vertical: { color: '#1E222D', size: 1, style: LineType.Dashed } },
+        grid: { show: true, horizontal: { color: '#1E222D', size: 1, style: 'dashed' as LineType }, vertical: { color: '#1E222D', size: 1, style: 'dashed' as LineType } },
         candle: {
-          type: CandleType.CandleSolid,
+          type: 'candle_solid' as CandleType,
           bar: {
             upColor: '#26A69A',
             downColor: '#EF5350',

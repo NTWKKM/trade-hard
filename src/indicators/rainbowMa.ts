@@ -1,5 +1,4 @@
-import type { KLineData, Indicator, IndicatorCreateTooltipDataSourceParams } from 'klinecharts';
-import { LineType } from 'klinecharts';
+import type { KLineData, Indicator, IndicatorCreateTooltipDataSourceParams, LineType } from 'klinecharts';
 import { calculateSma, calculateEma, calculateWma } from './maUtils';
 
 const colors = [
@@ -82,7 +81,7 @@ export const rainbowMaIndicator = {
   })),
   styles: {
     lines: colors.map(color => ({
-      style: LineType.Solid,
+      style: 'solid' as LineType,
       size: 1,
       color,
       smooth: false,
