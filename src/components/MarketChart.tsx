@@ -3,9 +3,11 @@ import { init, dispose, registerIndicator, LineType, CandleType } from 'klinecha
 import type { Chart } from 'klinecharts';
 import { fetchHistoricalData } from '../utils/binanceApi';
 import { rainbowMaIndicator } from '../indicators/rainbowMa';
+import { cdcActionZoneIndicator } from '../indicators/cdcActionZone';
 
 // Register our custom indicator globally
 registerIndicator(rainbowMaIndicator);
+registerIndicator(cdcActionZoneIndicator);
 
 export default function MarketChart() {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -44,6 +46,8 @@ export default function MarketChart() {
     
     // Add Custom Indicator to the main candle pane
     chart?.createIndicator('RainbowMA', false, { id: 'candle_pane' });
+    // Add CDC ActionZone to a new pane at the bottom
+    chart?.createIndicator('CDCActionZone', false, { id: 'cdc_pane', height: 40 });
 
     // Cleanup
     return () => {
