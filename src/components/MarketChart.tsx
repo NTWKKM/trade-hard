@@ -68,10 +68,10 @@ export default function MarketChart() {
     chartInstance.current = chart;
 
     if (chart) {
-      // Add Custom Indicator to the main candle pane
-      chart.createIndicator('RainbowMA', false, { id: 'candle_pane' });
-      // Add CDC ActionZone to a new pane at the bottom
-      chart.createIndicator('CDCActionZone', false, { id: 'cdc_pane', height: 40 });
+      // Add RainbowMA as overlay on the main candle pane (isStack: true)
+      chart.createIndicator('RainbowMA', true);
+      // Add CDC ActionZone to a new separate pane at the bottom (isStack: false)
+      chart.createIndicator('CDCActionZone', false, { id: 'cdc_pane', height: 120 });
     }
 
     // Cleanup — capture ref to avoid stale closure
