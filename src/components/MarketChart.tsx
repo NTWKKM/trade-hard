@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { init, dispose, registerIndicator, LineType, CandleType } from 'klinecharts';
 import type { Chart } from 'klinecharts';
-import { fetchHistoricalData } from '../utils/binanceApi';
+import { fetchHistoricalData, DATA_SOURCES } from '../utils/marketData';
+import type { DataSource } from '../utils/marketData';
 import { rainbowMaIndicator } from '../indicators/rainbowMa';
 import { cdcActionZoneIndicator } from '../indicators/cdcActionZone';
 
@@ -31,6 +32,8 @@ const INTERVALS = [
   { value: '1w', label: '1W' },
 ];
 
+const selectClass = "bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer";
+
 export default function MarketChart() {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<Chart | null>(null);
@@ -38,11 +41,11 @@ export default function MarketChart() {
   const [error, setError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeInterval, setTimeInterval] = useState('1d');
+  const [source, setSource] = useState<DataSource>('binance');
 
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // 1. Initialize Chart with dark theme
     const chart = init(chartRef.current, {
       styles: {
         grid: { show: true, horizontal: { color: '#1E222D', size: 1, style: LineType.Dashed }, vertical: { color: '#1E222D', size: 1, style: LineType.Dashed } },
@@ -68,13 +71,10 @@ export default function MarketChart() {
     chartInstance.current = chart;
 
     if (chart) {
-      // Add RainbowMA as overlay on the main candle pane (isStack: true)
       chart.createIndicator('RainbowMA', true);
-      // Add CDC ActionZone to a new separate pane at the bottom (isStack: false)
       chart.createIndicator('CDCActionZone', false, { id: 'cdc_pane', height: 120 });
     }
 
-    // Cleanup — capture ref to avoid stale closure
     const container = chartRef.current;
     return () => {
       if (container) {
@@ -90,7 +90,7 @@ export default function MarketChart() {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchHistoricalData(symbol, timeInterval, 1000);
+        const data = await fetchHistoricalData(source, symbol, timeInterval, 1000);
         chartInstance.current.applyNewData(data);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load chart data';
@@ -101,16 +101,26 @@ export default function MarketChart() {
       }
     };
 
-    // Debounce: wait 400ms before fetching to avoid rapid API calls on fast switching
     const debounceTimer = setTimeout(loadData, 400);
     return () => clearTimeout(debounceTimer);
-  }, [symbol, timeInterval]);
+  }, [source, symbol, timeInterval]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div className="absolute top-4 left-4 z-10 flex gap-2 flex-wrap">
         <select
-          className="bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer"
+          className={selectClass}
+          value={source}
+          onChange={e => setSource(e.target.value as DataSource)}
+          aria-label="Select data source"
+        >
+          {DATA_SOURCES.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+
+        <select
+          className={selectClass}
           value={symbol}
           onChange={e => setSymbol(e.target.value)}
           aria-label="Select trading pair"
@@ -121,7 +131,7 @@ export default function MarketChart() {
         </select>
 
         <select
-          className="bg-[#1E222D] text-white px-3 py-1.5 rounded border border-[#333843] focus:outline-none text-sm font-medium cursor-pointer"
+          className={selectClass}
           value={timeInterval}
           onChange={e => setTimeInterval(e.target.value)}
           aria-label="Select timeframe"
