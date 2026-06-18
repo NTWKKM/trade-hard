@@ -18,7 +18,7 @@
 
 - **klinecharts `init()` can return null** — Must null-check before calling `chart.createIndicator()`. Code handles this with `if (chart)` guard.
 - **`registerIndicator()` is global** — Called at module top-level in MarketChart.tsx. Registers once per page load. Calling again with same name is a no-op.
-- **Binance API rate limits** — Client-side direct calls to `api.binance.com`. Debounce (400ms) on symbol/timeframe switching reduces API calls. No hard rate limiting implemented. Consider server-side proxy for production.
+- **Binance API rate limits** — Client-side direct calls to `data-api.binance.vision` (Binance public data mirror, CORS-enabled). `api.binance.com` blocks browser fetch requests. Debounce (400ms) on symbol/timeframe switching reduces API calls. Consider server-side proxy for production rate limiting.
 - **`timeInterval` naming** — State variable is `timeInterval` (not `interval`) to avoid shadowing `window.setInterval`. The state setter is `setTimeInterval`.
 - **Cleanup ref capture** — `chartRef.current` is captured into a local `container` variable inside the cleanup function to avoid stale ref after React unmount (React 19 StrictMode double-invokes effects in dev).
 - **CDCActionZone `signal` value** — Represents the raw delta between fast and slow EMA, not a fixed constant. Bars scale proportionally to momentum strength.

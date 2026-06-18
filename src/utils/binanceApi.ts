@@ -22,12 +22,16 @@ type BinanceKline = [
   string   // Ignore
 ];
 
+// Binance public data endpoint — CORS-enabled, no API key required
+// api.binance.com blocks browser requests (CORS); data-api.binance.vision is the public mirror
+const BINANCE_BASE = 'https://data-api.binance.vision';
+
 export async function fetchHistoricalData(
   symbol: string,
   interval: string,
   limit: number = 1000
 ): Promise<KLineResult[]> {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `${BINANCE_BASE}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
