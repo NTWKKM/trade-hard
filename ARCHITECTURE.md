@@ -18,12 +18,16 @@
 
 - **klinecharts `init()` can return null** — Must null-check before calling `chart.createIndicator()`. Code handles this with `if (chart)` guard.
 - **`registerIndicator()` is global** — Called at module top-level in MarketChart.tsx. Registers once per page load. Calling again with same name is a no-op.
-- **Multi-source data fetching** — Only 3 exchanges have CORS enabled for browser requests: Binance (data-api.binance.vision), Binance US (api.binance.us), Kraken (api.kraken.com). Coinbase, OKX, Bybit, KuCoin all block browser fetch. User can switch source via dropdown.
+- **Multi-source data fetching** — Only 3 exchanges have CORS enabled for browser requests: Binance (data-api.binance.vision), Binance US (api.binance.us), Kraken (api.kraken.com). User can switch source via dropdown.
 - **Kraken symbol mapping** — Kraken uses different symbol names (XBTUSD instead of BTCUSDT, XDGUSD instead of DOGEUSDT). Mapped via KRAKEN_SYMBOL_MAP.
 - **Kraken candle limit** — Kraken returns up to 720 candles per request (vs Binance 1000). Data is sliced to requested limit after sorting ascending.
 - **`timeInterval` naming** — State variable is `timeInterval` (not `interval`) to avoid shadowing `window.setInterval`. The state setter is `setTimeInterval`.
-- **Cleanup ref capture** — `chartRef.current` is captured into a local `container` variable inside the cleanup function to avoid stale ref after React unmount (React 19 StrictMode double-invokes effects in dev).
+- **Cleanup ref capture** — `chartRef.current` is captured into a local `container` variable inside the cleanup function to avoid stale ref after React unmount (React 19 StrictMode double-invokes effects).
 - **CDCActionZone `signal` value** — Represents the raw delta between fast and slow EMA, not a fixed constant. Bars scale proportionally to momentum strength.
 - **Dead code removed** — App.css, assets/ (vite.svg, react.svg, hero.png) were Vite template defaults and have been deleted.
-- **CI uses pnpm v9** — `pnpm/action-setup@v3` with `version: 9` in deploy.yml. Lockfile version 9.0. CI runs tests before build.
+- **CI uses pnpm v9** — `pnpm/action-setup@v3` with `version: 9` in deploy.yml. Lockfile version 9.0 CI runs tests before build.
 - **Unit tests** — `maUtils.test.ts` covers SMA/EMA/WMA with edge cases (empty array, period=1, period > data length). Run via `pnpm test`.
+- **Performance Optimizations** — Implemented caching for API responses (5-minute expiration) and calculation results to reduce redundant network requests and computations.
+- **Memory Management** — Added proper cleanup for debounce timers and cache size limits to prevent memory leaks.
+- **Error Handling** — Enhanced error messages with better context and timeout handling for improved user experience.
+- **Component Optimization** — Used React.memo, useCallback, and useMemo to prevent unnecessary re-renders and improve performance.
