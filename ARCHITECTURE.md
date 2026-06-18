@@ -18,9 +18,10 @@
 
 - **klinecharts `init()` can return null** — Must null-check before calling `chart.createIndicator()`. Code handles this with `if (chart)` guard.
 - **`registerIndicator()` is global** — Called at module top-level in MarketChart.tsx. Registers once per page load. Calling again with same name is a no-op.
-- **Binance API rate limits** — Client-side direct calls to `api.binance.com`. No rate limiting implemented. Heavy rapid switching of symbol/timeframe may trigger IP bans. Consider server-side proxy for production.
+- **Binance API rate limits** — Client-side direct calls to `api.binance.com`. Debounce (400ms) on symbol/timeframe switching reduces API calls. No hard rate limiting implemented. Consider server-side proxy for production.
 - **`timeInterval` naming** — State variable is `timeInterval` (not `interval`) to avoid shadowing `window.setInterval`. The state setter is `setTimeInterval`.
 - **Cleanup ref capture** — `chartRef.current` is captured into a local `container` variable inside the cleanup function to avoid stale ref after React unmount (React 19 StrictMode double-invokes effects in dev).
 - **CDCActionZone `signal` value** — Represents the raw delta between fast and slow EMA, not a fixed constant. Bars scale proportionally to momentum strength.
 - **Dead code removed** — App.css, assets/ (vite.svg, react.svg, hero.png) were Vite template defaults and have been deleted.
-- **CI uses pnpm v8** — `pnpm/action-setup@v3` with `version: 8` in deploy.yml. If local pnpm version differs, lockfile format may mismatch.
+- **CI uses pnpm v9** — `pnpm/action-setup@v3` with `version: 9` in deploy.yml. Lockfile version 9.0. CI runs tests before build.
+- **Unit tests** — `maUtils.test.ts` covers SMA/EMA/WMA with edge cases (empty array, period=1, period > data length). Run via `pnpm test`.

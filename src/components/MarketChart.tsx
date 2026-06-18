@@ -101,7 +101,9 @@ export default function MarketChart() {
       }
     };
 
-    loadData();
+    // Debounce: wait 400ms before fetching to avoid rapid API calls on fast switching
+    const debounceTimer = setTimeout(loadData, 400);
+    return () => clearTimeout(debounceTimer);
   }, [symbol, timeInterval]);
 
   return (
