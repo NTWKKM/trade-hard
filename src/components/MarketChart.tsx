@@ -214,7 +214,7 @@ export default function MarketChart() {
 
     function rRect(x: number, y: number, w: number, h: number, r: number) {
       ctx!.beginPath();
-      if (ctx!.roundRect) {
+      if (typeof ctx!.roundRect === 'function') {
         ctx!.roundRect(x, y, w, h, r);
       } else {
         ctx!.moveTo(x+r,y); ctx!.arcTo(x+w,y,x+w,y+h,r);
