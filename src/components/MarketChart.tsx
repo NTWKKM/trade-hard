@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import './MarketChart.css';
 import { fetchHistoricalData, fetch24hrTicker } from '../utils/marketData';
 import type { KLineResult, Ticker24hrResult } from '../utils/marketData';
+import { rainbowMaIndicator } from '../indicators/rainbowMa';
+import { cdcActionZoneIndicator } from '../indicators/cdcActionZone.optimized';
+import type { KLineData, Indicator } from 'klinecharts';
 
 export default function MarketChart() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,9 +53,10 @@ export default function MarketChart() {
       main: PaneRect; vol: PaneRect; macd: PaneRect; rsi: PaneRect; px: PaneRect; tx: PaneRect;
     }
     interface IndState {
-      e9: Float64Array; e21: Float64Array;
       ml: Float64Array; sl: Float64Array; hi: Float64Array;
       rsi: Float64Array;
+      rainbow?: Record<string, number | null>[];
+      cdc?: { signal: number; color: 'Black' | 'Green' | 'Blue' | 'LBlue' | 'Red' | 'Orange' | 'Yellow' }[];
     }
 
     let bars: BarData[]      = [];
@@ -151,11 +155,24 @@ export default function MarketChart() {
 
     function computeIndicators() {
       const closes = Float64Array.from(bars, b => b.c);
+      const klineData: KLineData[] = bars.map(b => ({
+        timestamp: b.t,
+        open: b.o,
+        high: b.h,
+        low: b.l,
+        close: b.c,
+        volume: b.v,
+        turnover: 0
+      }));
+
+      const rainbowData = rainbowMaIndicator.calc(klineData, { calcParams: rainbowMaIndicator.calcParams } as unknown as Indicator<Record<string, number | null>>);
+      const cdcData = cdcActionZoneIndicator.calc(klineData, { calcParams: cdcActionZoneIndicator.calcParams } as unknown as Indicator<{ signal: number; color: 'Black' | 'Green' | 'Blue' | 'LBlue' | 'Red' | 'Orange' | 'Yellow' }>);
+
       ind = {
-        e9:  ema(closes, 9),
-        e21: ema(closes, 21),
         ...macd(closes),
         rsi: calcRsi(closes, 14),
+        rainbow: rainbowData,
+        cdc: cdcData,
       };
     }
 
@@ -271,8 +288,35 @@ export default function MarketChart() {
 
       grid(main, mLo, mHi, 5);
 
-      seriesLine(ind.e9,  s, e, bw, main, mLo, mHi, C.ema9,  1.3);
-      seriesLine(ind.e21, s, e, bw, main, mLo, mHi, C.ema21, 1.3);
+      if (ind.rainbow) {
+        for (let c = 0; c < 64; c++) {
+          const maKey = `ma${c + 1}`;
+          const color = rainbowMaIndicator.styles.lines[c].color;
+          ctx!.strokeStyle = color;
+          ctx!.lineWidth = 1;
+          ctx!.beginPath();
+          let moved = false;
+          for (let i = s; i < e; i++) {
+            const v = ind.rainbow[i][maKey];
+            if (v === null || !isOK(v)) { moved = false; continue; }
+            const x = main.x + (i - s + 0.5) * bw;
+            const y = toY(v, mLo, mHi, main);
+            if (!moved) { ctx!.moveTo(x, y); moved = true; }
+            else ctx!.lineTo(x, y);
+          }
+          ctx!.stroke();
+        }
+      }
+
+      const COLOR_MAP: Record<string, string> = {
+        Black: 'rgba(136, 136, 136, 0.3)',
+        Green: '#00E676',
+        Blue: '#2962FF',
+        LBlue: '#00B0FF',
+        Red: '#FF5252',
+        Orange: '#FF9100',
+        Yellow: '#FFEB3B',
+      };
 
       for (let i = 0; i < n; i++) {
         const b  = vis[i];
@@ -282,7 +326,12 @@ export default function MarketChart() {
         const yL = toY(b.l, mLo, mHi, main);
         const yO = toY(b.o, mLo, mHi, main);
         const yC = toY(b.c, mLo, mHi, main);
-        const cl = up ? C.up : C.dn;
+
+        let cl = up ? C.up : C.dn;
+        if (ind.cdc && ind.cdc[s + i]) {
+          const cdcColorName = ind.cdc[s + i].color;
+          if (COLOR_MAP[cdcColorName]) cl = COLOR_MAP[cdcColorName];
+        }
 
         ctx!.strokeStyle = cl;
         ctx!.lineWidth   = Math.max(1, bw < 6 ? 1 : 1.5);
@@ -707,10 +756,10 @@ export default function MarketChart() {
   }, []);
 
   return (
-    <div className="astronex-theme" ref={containerRef}>
+    <div className="trade-hard-theme" ref={containerRef}>
       {/* ▸ TOPBAR */}
       <div className="topbar">
-        <span className="brand">◈ ASTRONEX</span>
+        <span className="brand">◈ TRADE-HARD</span>
         <div className="v-sep"></div>
 
         <select className="sym-select" id="symSelect" defaultValue="BTCUSDT">
@@ -742,8 +791,8 @@ export default function MarketChart() {
       {/* ▸ SUB-TOOLBAR */}
       <div className="subtoolbar">
         <div className="ind-chips">
-          <span className="chip"><span className="dot" style={{background: 'var(--ema9)'}}></span>EMA 9</span>
-          <span className="chip"><span className="dot" style={{background: 'var(--ema21)'}}></span>EMA 21</span>
+          <span className="chip"><span className="dot" style={{background: 'linear-gradient(90deg, red, orange, yellow, green, blue, indigo, violet)'}}></span>Rainbow MA</span>
+          <span className="chip"><span className="dot" style={{background: '#00E676'}}></span>CDC ActionZone</span>
           <span className="chip"><span className="dot" style={{background: 'var(--up)', opacity: 0.8}}></span>VOL</span>
           <span className="chip"><span className="dot" style={{background: 'var(--macd-ml)'}}></span>MACD</span>
           <span className="chip"><span className="dot" style={{background: 'var(--rsi)'}}></span>RSI 14</span>

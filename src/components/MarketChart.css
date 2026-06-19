@@ -2,7 +2,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    TOKENS
 ═══════════════════════════════════════════════════════════════════ */
-.astronex-theme {
+.trade-hard-theme {
   --bg0:       #0f1117;
   --bg1:       #1a1e2e;
   --bg2:       #242838;
@@ -42,7 +42,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    TOPBAR
 ═══════════════════════════════════════════════════════════════════ */
-.astronex-theme .topbar {
+.trade-hard-theme .topbar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -53,7 +53,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-.astronex-theme .brand {
+.trade-hard-theme .brand {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 1.5px;
@@ -65,9 +65,9 @@
   flex-shrink: 0;
 }
 
-.astronex-theme .v-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+.trade-hard-theme .v-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
 
-.astronex-theme .sym-select {
+.trade-hard-theme .sym-select {
   appearance: none;
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -82,10 +82,10 @@
   background-position: right 8px center;
   transition: border-color .15s;
 }
-.astronex-theme .sym-select:hover, .astronex-theme .sym-select:focus { border-color: var(--blue); }
+.trade-hard-theme .sym-select:hover, .trade-hard-theme .sym-select:focus { border-color: var(--blue); }
 
-.astronex-theme .tf-group { display: flex; align-items: center; gap: 1px; }
-.astronex-theme .tf-btn {
+.trade-hard-theme .tf-group { display: flex; align-items: center; gap: 1px; }
+.trade-hard-theme .tf-btn {
   border: none;
   background: transparent;
   color: var(--t1);
@@ -96,32 +96,32 @@
   transition: background .12s, color .12s;
   white-space: nowrap;
 }
-.astronex-theme .tf-btn:hover  { background: var(--bg2); color: var(--t0); }
-.astronex-theme .tf-btn.active { background: var(--blue-dim); color: var(--blue); font-weight: 700; }
+.trade-hard-theme .tf-btn:hover  { background: var(--bg2); color: var(--t0); }
+.trade-hard-theme .tf-btn.active { background: var(--blue-dim); color: var(--blue); font-weight: 700; }
 
-.astronex-theme .price-block { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
-.astronex-theme #priceVal {
+.trade-hard-theme .price-block { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+.trade-hard-theme #priceVal {
   font-size: 22px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.5px;
 }
-.astronex-theme #priceBadge {
+.trade-hard-theme #priceBadge {
   font-size: 12px;
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 4px;
 }
 
-.astronex-theme .col-up   { color: var(--up); }
-.astronex-theme .col-dn   { color: var(--dn); }
-.astronex-theme .badge-up { background: var(--up-dim); color: var(--up); }
-.astronex-theme .badge-dn { background: var(--dn-dim); color: var(--dn); }
+.trade-hard-theme .col-up   { color: var(--up); }
+.trade-hard-theme .col-dn   { color: var(--dn); }
+.trade-hard-theme .badge-up { background: var(--up-dim); color: var(--up); }
+.trade-hard-theme .badge-dn { background: var(--dn-dim); color: var(--dn); }
 
 /* ═══════════════════════════════════════════════════════════════════
    SUB-TOOLBAR  (indicator chips + OHLCV)
 ═══════════════════════════════════════════════════════════════════ */
-.astronex-theme .subtoolbar {
+.trade-hard-theme .subtoolbar {
   display: flex;
   align-items: center;
   gap: 0;
@@ -133,8 +133,8 @@
   overflow: hidden;
 }
 
-.astronex-theme .ind-chips { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.astronex-theme .chip {
+.trade-hard-theme .ind-chips { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.trade-hard-theme .chip {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -145,11 +145,11 @@
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.astronex-theme .chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.trade-hard-theme .chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
-.astronex-theme .subtoolbar .v-sep { margin: 0 10px; height: 16px; }
+.trade-hard-theme .subtoolbar .v-sep { margin: 0 10px; height: 16px; }
 
-.astronex-theme .ohlcv-row {
+.trade-hard-theme .ohlcv-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -158,21 +158,21 @@
   font-variant-numeric: tabular-nums;
   overflow: hidden;
 }
-.astronex-theme .ohlcv-row .lbl { color: var(--t2); margin-right: 2px; }
-.astronex-theme .ohlcv-row .val { color: var(--t0); }
-.astronex-theme #chgVal { font-weight: 700; }
+.trade-hard-theme .ohlcv-row .lbl { color: var(--t2); margin-right: 2px; }
+.trade-hard-theme .ohlcv-row .val { color: var(--t0); }
+.trade-hard-theme #chgVal { font-weight: 700; }
 
 /* ═══════════════════════════════════════════════════════════════════
    CHART WRAPPER + CANVAS
 ═══════════════════════════════════════════════════════════════════ */
-.astronex-theme .chart-wrap {
+.trade-hard-theme .chart-wrap {
   flex: 1;
   position: relative;
   min-height: 0;
   overflow: hidden;
 }
 
-.astronex-theme #chart {
+.trade-hard-theme #chart {
   position: absolute;
   inset: 0;
   cursor: crosshair;
@@ -182,7 +182,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    LOADER
 ═══════════════════════════════════════════════════════════════════ */
-.astronex-theme #loader {
+.trade-hard-theme #loader {
   position: absolute;
   inset: 0;
   background: var(--bg0);
@@ -194,19 +194,19 @@
   z-index: 99;
   transition: opacity .3s;
 }
-.astronex-theme .ring {
+.trade-hard-theme .ring {
   width: 36px; height: 36px;
   border: 3px solid var(--bg3);
   border-top-color: var(--blue);
   border-radius: 50%;
   animation: spin 0.75s linear infinite;
 }
-.astronex-theme .loader-txt { font-size: 12px; color: var(--t1); }
+.trade-hard-theme .loader-txt { font-size: 12px; color: var(--t1); }
 
 /* ═══════════════════════════════════════════════════════════════════
    STATUSBAR
 ═══════════════════════════════════════════════════════════════════ */
-.astronex-theme .statusbar {
+.trade-hard-theme .statusbar {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -219,7 +219,7 @@
   color: var(--t2);
   overflow: hidden;
 }
-.astronex-theme .live-dot {
+.trade-hard-theme .live-dot {
   width: 5px; height: 5px;
   border-radius: 50%;
   background: var(--up);
@@ -227,4 +227,4 @@
   animation: pulse 2.2s ease-in-out infinite;
   flex-shrink: 0;
 }
-.astronex-theme .statusbar span { color: var(--t1); }
+.trade-hard-theme .statusbar span { color: var(--t1); }
