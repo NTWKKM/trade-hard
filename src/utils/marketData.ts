@@ -22,7 +22,7 @@ export interface Ticker24hrResult {
 type BinanceKline = [number, string, string, string, string, string, number, string, number, string, string, string];
 
 async function fetchBinanceUiKlines(symbol: string, interval: string, limit: number): Promise<KLineResult[]> {
-  const url = `https://data-api.binance.vision/api/v3/uiKlines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `https://api.binance.com/api/v3/uiKlines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
   const data: BinanceKline[] = await response.json();
@@ -38,7 +38,7 @@ async function fetchBinanceUiKlines(symbol: string, interval: string, limit: num
 }
 
 export async function fetch24hrTicker(symbol: string): Promise<Ticker24hrResult> {
-  const url = `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${symbol}`;
+  const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
   const data: Ticker24hrResult = await response.json();
