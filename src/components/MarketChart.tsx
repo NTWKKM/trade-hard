@@ -62,6 +62,7 @@ export default function MarketChart() {
     let bars: BarData[]      = [];
     let symbol    = 'BTCUSDT';
     let tf        = '1h';
+    let chartType = 'candle';
     let viewStart = 0;
     let viewBars  = 120;
     let mx = -1, my = -1;
@@ -318,39 +319,94 @@ export default function MarketChart() {
         Yellow: '#FFEB3B',
       };
 
-      for (let i = 0; i < n; i++) {
-        const b  = vis[i];
-        const up = b.c >= b.o;
-        const x  = main.x + (i + 0.5) * bw;
-        const yH = toY(b.h, mLo, mHi, main);
-        const yL = toY(b.l, mLo, mHi, main);
-        const yO = toY(b.o, mLo, mHi, main);
-        const yC = toY(b.c, mLo, mHi, main);
+      let maxVol = 0;
+      for (const b of vis) if (b.v > maxVol) maxVol = b.v;
 
-        let cl = up ? C.up : C.dn;
-        if (ind.cdc && ind.cdc[s + i]) {
-          const cdcColorName = ind.cdc[s + i].color;
-          if (COLOR_MAP[cdcColorName]) cl = COLOR_MAP[cdcColorName];
+      if (chartType === 'line' || chartType === 'vol-line') {
+        let prevX = -1, prevY = -1;
+        for (let i = 0; i < n; i++) {
+          const b  = vis[i];
+          const x  = main.x + (i + 0.5) * bw;
+          const yC = toY(b.c, mLo, mHi, main);
+          
+          if (chartType === 'line') {
+            if (i === 0) {
+              ctx!.beginPath();
+              ctx!.moveTo(x, yC);
+            } else {
+              ctx!.lineTo(x, yC);
+            }
+          } else { // vol-line
+            if (i > 0) {
+              const volRatio = maxVol > 0 ? b.v / maxVol : 0;
+              const lw = 1 + (volRatio * 8);
+              const cl = b.c >= vis[i-1].c ? C.up : C.dn;
+              ctx!.strokeStyle = cl;
+              ctx!.lineWidth = lw;
+              ctx!.lineCap = 'round';
+              ctx!.beginPath();
+              ctx!.moveTo(prevX, prevY);
+              ctx!.lineTo(x, yC);
+              ctx!.stroke();
+            }
+          }
+          prevX = x; prevY = yC;
         }
-
-        ctx!.strokeStyle = cl;
-        ctx!.lineWidth   = Math.max(1, bw < 6 ? 1 : 1.5);
-        ctx!.beginPath(); ctx!.moveTo(x, yH); ctx!.lineTo(x, yL); ctx!.stroke();
-
-        const by = Math.min(yO, yC);
-        const bh = Math.max(1, Math.abs(yC - yO));
-        ctx!.fillStyle = cl;
-        ctx!.fillRect(x - cw/2, by, cw, bh);
-
-        if (up && cw > 3) {
-          ctx!.fillStyle = C.bg0;
-          ctx!.fillRect(x - cw/2 + 1, by + 1, cw - 2, Math.max(0, bh - 2));
-          ctx!.fillStyle = cl;
+        if (chartType === 'line') {
+          ctx!.strokeStyle = C.blue;
+          ctx!.lineWidth = 2;
+          ctx!.lineCap = 'round';
+          ctx!.stroke();
         }
       }
 
-      let maxVol = 0;
-      for (const b of vis) if (b.v > maxVol) maxVol = b.v;
+      if (chartType === 'candle' || chartType === 'vol-candle') {
+        for (let i = 0; i < n; i++) {
+          const b  = vis[i];
+          const up = b.c >= b.o;
+          const x  = main.x + (i + 0.5) * bw;
+          const yH = toY(b.h, mLo, mHi, main);
+          const yL = toY(b.l, mLo, mHi, main);
+          const yO = toY(b.o, mLo, mHi, main);
+          const yC = toY(b.c, mLo, mHi, main);
+
+          const cl = up ? C.up : C.dn;
+
+          let drawCw = cw;
+          if (chartType === 'vol-candle') {
+            const volRatio = maxVol > 0 ? b.v / maxVol : 0;
+            drawCw = Math.max(1, bw * 0.9 * volRatio);
+          }
+
+          ctx!.strokeStyle = cl;
+          ctx!.lineWidth   = Math.max(1, bw < 6 ? 1 : 1.5);
+          ctx!.beginPath(); ctx!.moveTo(x, yH); ctx!.lineTo(x, yL); ctx!.stroke();
+
+          const by = Math.min(yO, yC);
+          const bh = Math.max(1, Math.abs(yC - yO));
+          ctx!.fillStyle = cl;
+          ctx!.fillRect(x - drawCw/2, by, drawCw, bh);
+
+          if (up && drawCw > 3) {
+            ctx!.fillStyle = C.bg0;
+            ctx!.fillRect(x - drawCw/2 + 1, by + 1, drawCw - 2, Math.max(0, bh - 2));
+            ctx!.fillStyle = cl;
+          }
+        }
+      }
+
+      // Draw CDC ribbon
+      for (let i = 0; i < n; i++) {
+        const x  = main.x + (i + 0.5) * bw;
+        if (ind.cdc && ind.cdc[s + i]) {
+          const cdcColorName = ind.cdc[s + i].color;
+          if (COLOR_MAP[cdcColorName]) {
+            ctx!.fillStyle = COLOR_MAP[cdcColorName];
+            // Draw a rectangle ribbon at the bottom of the main chart
+            ctx!.fillRect(x - cw/2, main.y + main.h - 8, cw, 8);
+          }
+        }
+      }
       grid(vol, 0, maxVol, 2);
 
       for (let i = 0; i < n; i++) {
@@ -733,6 +789,17 @@ export default function MarketChart() {
     };
     tfGroup?.addEventListener('click', handleTfClick);
 
+    const typeGroup = containerRef.current.querySelector('#chartTypeGroup');
+    const handleTypeClick = (e: Event) => {
+      const btn = (e.target as HTMLElement).closest('.tf-btn') as HTMLElement;
+      if (!btn) return;
+      typeGroup?.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      chartType = btn.dataset.type!;
+      render();
+    };
+    typeGroup?.addEventListener('click', handleTypeClick);
+
     const ro = new ResizeObserver(() => resize());
     ro.observe(wrap);
 
@@ -751,6 +818,7 @@ export default function MarketChart() {
       window.removeEventListener('keydown', handleKeyDown);
       symSelect.removeEventListener('change', handleSymChange);
       tfGroup?.removeEventListener('click', handleTfClick);
+      typeGroup?.removeEventListener('click', handleTypeClick);
       ro.disconnect();
     };
   }, []);
@@ -780,6 +848,15 @@ export default function MarketChart() {
           <button className="tf-btn" data-tf="4h">4H</button>
           <button className="tf-btn" data-tf="1d">1D</button>
           <button className="tf-btn" data-tf="1w">1W</button>
+        </div>
+
+        <div className="v-sep"></div>
+
+        <div className="tf-group" id="chartTypeGroup">
+          <button className="tf-btn active" data-type="candle">Candle</button>
+          <button className="tf-btn" data-type="vol-candle">Vol Candle</button>
+          <button className="tf-btn" data-type="line">Line</button>
+          <button className="tf-btn" data-type="vol-line">Vol Line</button>
         </div>
 
         <div className="price-block">
