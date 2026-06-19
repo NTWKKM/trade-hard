@@ -1,0 +1,230 @@
+/* src/components/MarketChart.css */
+/* ═══════════════════════════════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════════════════════════════ */
+.astronex-theme {
+  --bg0:       #0f1117;
+  --bg1:       #1a1e2e;
+  --bg2:       #242838;
+  --bg3:       #2c3044;
+  --border:    #30354a;
+  --border-hi: #454c6a;
+  --t0:        #dde1f0;
+  --t1:        #828aaa;
+  --t2:        #4a5070;
+  --up:        #26c6a0;
+  --dn:        #f0544f;
+  --up-dim:    rgba(38,198,160,.15);
+  --dn-dim:    rgba(240,84,79,.15);
+  --blue:      #4c7cfc;
+  --blue-dim:  rgba(76,124,252,.18);
+  --ema9:      #f5a623;
+  --ema21:     #6ab4f0;
+  --macd-ml:   #4c7cfc;
+  --macd-sl:   #f5623a;
+  --rsi:       #c386f8;
+  --grid:      rgba(255,255,255,.04);
+  --sep:       rgba(255,255,255,.06);
+
+  display: flex;
+  flex-direction: column;
+  background: var(--bg0);
+  color: var(--t0);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOPBAR
+═══════════════════════════════════════════════════════════════════ */
+.astronex-theme .topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  flex-shrink: 0;
+  padding: 0 14px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+}
+
+.astronex-theme .brand {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  background: linear-gradient(135deg, #4c7cfc, #26c6a0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.astronex-theme .v-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+.astronex-theme .sym-select {
+  appearance: none;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--t0);
+  font: 600 13px/1 inherit;
+  padding: 5px 28px 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23828aaa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color .15s;
+}
+.astronex-theme .sym-select:hover, .astronex-theme .sym-select:focus { border-color: var(--blue); }
+
+.astronex-theme .tf-group { display: flex; align-items: center; gap: 1px; }
+.astronex-theme .tf-btn {
+  border: none;
+  background: transparent;
+  color: var(--t1);
+  font: 500 12px/1 inherit;
+  padding: 5px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
+}
+.astronex-theme .tf-btn:hover  { background: var(--bg2); color: var(--t0); }
+.astronex-theme .tf-btn.active { background: var(--blue-dim); color: var(--blue); font-weight: 700; }
+
+.astronex-theme .price-block { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+.astronex-theme #priceVal {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.astronex-theme #priceBadge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.astronex-theme .col-up   { color: var(--up); }
+.astronex-theme .col-dn   { color: var(--dn); }
+.astronex-theme .badge-up { background: var(--up-dim); color: var(--up); }
+.astronex-theme .badge-dn { background: var(--dn-dim); color: var(--dn); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SUB-TOOLBAR  (indicator chips + OHLCV)
+═══════════════════════════════════════════════════════════════════ */
+.astronex-theme .subtoolbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0 14px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.astronex-theme .ind-chips { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.astronex-theme .chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--t1);
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.astronex-theme .chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+.astronex-theme .subtoolbar .v-sep { margin: 0 10px; height: 16px; }
+
+.astronex-theme .ohlcv-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--t1);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+.astronex-theme .ohlcv-row .lbl { color: var(--t2); margin-right: 2px; }
+.astronex-theme .ohlcv-row .val { color: var(--t0); }
+.astronex-theme #chgVal { font-weight: 700; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CHART WRAPPER + CANVAS
+═══════════════════════════════════════════════════════════════════ */
+.astronex-theme .chart-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.astronex-theme #chart {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LOADER
+═══════════════════════════════════════════════════════════════════ */
+.astronex-theme #loader {
+  position: absolute;
+  inset: 0;
+  background: var(--bg0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 99;
+  transition: opacity .3s;
+}
+.astronex-theme .ring {
+  width: 36px; height: 36px;
+  border: 3px solid var(--bg3);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+.astronex-theme .loader-txt { font-size: 12px; color: var(--t1); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATUSBAR
+═══════════════════════════════════════════════════════════════════ */
+.astronex-theme .statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0 14px;
+  background: var(--bg1);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--t2);
+  overflow: hidden;
+}
+.astronex-theme .live-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--up);
+  box-shadow: 0 0 6px var(--up);
+  animation: pulse 2.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.astronex-theme .statusbar span { color: var(--t1); }
