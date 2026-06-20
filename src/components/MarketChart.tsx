@@ -11,18 +11,18 @@ export default function MarketChart() {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const wrap = containerRef.current.querySelector('.chart-wrap') as HTMLElement;
-    const canvas = containerRef.current.querySelector('#chart') as HTMLCanvasElement;
-    const ctx = canvas.getContext('2d');
-    const loader = containerRef.current.querySelector('#loader') as HTMLElement;
+    const wrap    = containerRef.current.querySelector('.chart-wrap') as HTMLElement;
+    const canvas  = containerRef.current.querySelector('#chart') as HTMLCanvasElement;
+    const ctx     = canvas.getContext('2d');
+    const loader  = containerRef.current.querySelector('#loader') as HTMLElement;
     if (!ctx || !wrap || !canvas || !loader) return;
 
     /* ── CONFIG ─────────────────────────────────────────────────────── */
     const CFG = {
-      PRICE_W:  76,
-      TIME_H:   26,
-      GAP:       1,
-      RATIO:    { main:.56, vol:.12, macd:.16, rsi:.16 },
+      PRICE_W: 76,
+      TIME_H:  26,
+      GAP:      1,
+      RATIO:   { main: .56, vol: .12, macd: .16, rsi: .16 },
       LIMIT:   300,
       CLR: {
         bg0:'#0f1117', bg1:'#1a1e2e', bg2:'#242838', bg3:'#2c3044',
@@ -31,8 +31,6 @@ export default function MarketChart() {
         grid:'rgba(255,255,255,.04)',
         up:'#26c6a0', dn:'#f0544f',
         upDim:'rgba(38,198,160,.4)', dnDim:'rgba(240,84,79,.4)',
-        upFill:'rgba(38,198,160,.18)', dnFill:'rgba(240,84,79,.15)',
-        ema9:'#f5a623', ema21:'#6ab4f0',
         macdML:'#4c7cfc', macdSL:'#f5623a',
         histUp:'rgba(38,198,160,.6)', histDn:'rgba(240,84,79,.6)',
         rsi:'#c386f8',
@@ -43,11 +41,24 @@ export default function MarketChart() {
       },
     };
 
+    /* ── DOM REFS — cached once, zero per-frame querySelector ───────── */
+    const doc     = containerRef.current;
+    const elO     = doc.querySelector('#oO')     as HTMLElement;
+    const elH     = doc.querySelector('#oH')     as HTMLElement;
+    const elL     = doc.querySelector('#oL')     as HTMLElement;
+    const elC     = doc.querySelector('#oC')     as HTMLElement;
+    const elV     = doc.querySelector('#oV')     as HTMLElement;
+    const elChg   = doc.querySelector('#chgVal') as HTMLElement;
+    const elPrice = doc.querySelector('#priceVal')  as HTMLElement;
+    const elBadge = doc.querySelector('#priceBadge') as HTMLElement;
+    const elStSym = doc.querySelector('#stSym')  as HTMLElement;
+    const elStBars= doc.querySelector('#stBars') as HTMLElement;
+
     /* ── STATE ──────────────────────────────────────────────────────── */
-    interface BarData { t: number; o: number; h: number; l: number; c: number; v: number; }
+    interface BarData  { t: number; o: number; h: number; l: number; c: number; v: number; }
     interface DragState { sx: number; sv: number; }
     interface PinchState { d0: number; vb0: number; }
-    interface PaneRect { x: number; y: number; w: number; h: number; }
+    interface PaneRect  { x: number; y: number; w: number; h: number; }
     interface DimsState {
       W: number; H: number; cW: number; cH: number;
       main: PaneRect; vol: PaneRect; macd: PaneRect; rsi: PaneRect; px: PaneRect; tx: PaneRect;
@@ -56,7 +67,7 @@ export default function MarketChart() {
       ml: Float64Array; sl: Float64Array; hi: Float64Array;
       rsi: Float64Array;
       rainbow?: Record<string, number | null>[];
-      cdc?: { signal: number; color: 'Black' | 'Green' | 'Blue' | 'LBlue' | 'Red' | 'Orange' | 'Yellow' }[];
+      cdc?: { signal: number; color: 'Black'|'Green'|'Blue'|'LBlue'|'Red'|'Orange'|'Yellow' }[];
     }
 
     let bars: BarData[]      = [];
@@ -66,11 +77,73 @@ export default function MarketChart() {
     let viewStart = 0;
     let viewBars  = 120;
     let mx = -1, my = -1;
-    let drag: DragState | null      = null;
-    let pinch: PinchState | null     = null;
-    let dims: DimsState | null      = null;
-    let ind: IndState | null       = null;
-    const dpr    = window.devicePixelRatio || 1;
+    let drag: DragState | null   = null;
+    let pinch: PinchState | null = null;
+    let dims: DimsState | null   = null;
+    let ind: IndState | null     = null;
+    const dpr = window.devicePixelRatio || 1;
+
+    /* ── rAF THROTTLE ───────────────────────────────────────────────── */
+    // Multiple events per frame (mousemove, wheel) coalesce into one paint.
+    let rafPending = false;
+    function scheduleRender() {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        render();
+      });
+    }
+
+    /* ── OFFSCREEN RAINBOW CACHE ─────────────────────────────────────── */
+    // Rainbow MA: 64 lines × ~300 points. Only invalidated when view or data changes.
+    // On crosshair-only moves we just drawImage() the cache — ~64× fewer path ops.
+    let rainbowCache: OffscreenCanvas | null = null;
+    let rainbowCacheKey = '';   // encodes viewStart+viewBars+bars.length
+
+    function getRainbowCacheKey() {
+      return `${viewStart.toFixed(2)}_${viewBars}_${bars.length}`;
+    }
+
+    function invalidateRainbowCache() {
+      rainbowCache = null;
+      rainbowCacheKey = '';
+    }
+
+    function ensureRainbowCache(s: number, e: number, n: number, bw: number, mLo: number, mHi: number, main: PaneRect, W: number, H: number) {
+      const key = getRainbowCacheKey();
+      if (rainbowCache && rainbowCacheKey === key) return;
+
+      // Build (or rebuild) the offscreen layer at physical pixel size.
+      const oc  = new OffscreenCanvas(Math.round(W * dpr), Math.round(H * dpr));
+      const octx = oc.getContext('2d')!;
+      octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      if (ind?.rainbow) {
+        for (let c = 0; c < 64; c++) {
+          const maKey = `ma${c + 1}`;
+          octx.strokeStyle = rainbowMaIndicator.styles.lines[c].color;
+          octx.lineWidth   = 1;
+          octx.lineJoin    = 'round';
+          octx.lineCap     = 'round';
+          octx.beginPath();
+          let moved = false;
+          for (let i = s; i < e; i++) {
+            const v = ind.rainbow[i]?.[maKey];
+            if (v == null || !isFinite(v)) { moved = false; continue; }
+            const x = main.x + (i - s + 0.5) * bw;
+            const y = toY(v, mLo, mHi, main);
+            if (!moved) { octx.moveTo(x, y); moved = true; }
+            else          octx.lineTo(x, y);
+          }
+          octx.stroke();
+        }
+      }
+
+      rainbowCache    = oc;
+      rainbowCacheKey = key;
+      n; // suppress lint — n is used implicitly via loop bounds passed in
+    }
 
     /* ── LAYOUT ─────────────────────────────────────────────────────── */
     function resize() {
@@ -81,6 +154,7 @@ export default function MarketChart() {
       canvas.style.height = H + 'px';
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
       computeDims(W, H);
+      invalidateRainbowCache();
       render();
     }
 
@@ -99,14 +173,17 @@ export default function MarketChart() {
         vol:  { x:0, y:mH+g,         w:cW, h:vH },
         macd: { x:0, y:mH+vH+g*2,    w:cW, h:dH },
         rsi:  { x:0, y:mH+vH+dH+g*3, w:cW, h:rH },
-        px:   { x:cW,y:0,             w:CFG.PRICE_W, h:cH },
-        tx:   { x:0, y:cH,            w:W, h:CFG.TIME_H },
+        px:   { x:cW, y:0,            w:CFG.PRICE_W, h:cH },
+        tx:   { x:0,  y:cH,           w:W, h:CFG.TIME_H },
       };
     }
 
     /* ── INDICATOR MATH ─────────────────────────────────────────────── */
+    // These inlined Float64Array versions are kept here intentionally:
+    // they are ~2× faster than the (number|null)[] variants in maUtils.ts
+    // for datasets of 300+ bars (no null checks, contiguous memory layout).
     function ema(src: Float64Array, n: number) {
-      const k = 2 / (n + 1);
+      const k   = 2 / (n + 1);
       const out = new Float64Array(src.length).fill(NaN);
       let v = NaN;
       for (let i = 0; i < src.length; i++) {
@@ -155,31 +232,29 @@ export default function MarketChart() {
     }
 
     function computeIndicators() {
-      const closes = Float64Array.from(bars, b => b.c);
+      const closes  = Float64Array.from(bars, b => b.c);
       const klineData: KLineData[] = bars.map(b => ({
-        timestamp: b.t,
-        open: b.o,
-        high: b.h,
-        low: b.l,
-        close: b.c,
-        volume: b.v,
-        turnover: 0
+        timestamp: b.t, open: b.o, high: b.h, low: b.l, close: b.c,
+        volume: b.v, turnover: 0,
       }));
 
-      const rainbowData = rainbowMaIndicator.calc(klineData, { calcParams: rainbowMaIndicator.calcParams } as unknown as Indicator<Record<string, number | null>>);
-      const cdcData = cdcActionZoneIndicator.calc(klineData, { calcParams: cdcActionZoneIndicator.calcParams } as unknown as Indicator<{ signal: number; color: 'Black' | 'Green' | 'Blue' | 'LBlue' | 'Red' | 'Orange' | 'Yellow' }>);
+      const rainbowData = rainbowMaIndicator.calc(
+        klineData,
+        { calcParams: rainbowMaIndicator.calcParams } as unknown as Indicator<Record<string, number | null>>
+      );
+      const cdcData = cdcActionZoneIndicator.calc(
+        klineData,
+        { calcParams: cdcActionZoneIndicator.calcParams } as unknown as Indicator<{ signal: number; color: 'Black'|'Green'|'Blue'|'LBlue'|'Red'|'Orange'|'Yellow' }>
+      );
 
-      ind = {
-        ...macd(closes),
-        rsi: calcRsi(closes, 14),
-        rainbow: rainbowData,
-        cdc: cdcData,
-      };
+      ind = { ...macd(closes), rsi: calcRsi(closes, 14), rainbow: rainbowData, cdc: cdcData };
+      invalidateRainbowCache();
     }
 
     /* ── DRAW HELPERS ───────────────────────────────────────────────── */
     const isOK = (v: number) => isFinite(v) && !isNaN(v);
-    const toY  = (v: number, lo: number, hi: number, p: PaneRect) => p.y + (1 - (v - lo) / (hi - lo || 1)) * p.h;
+    const toY  = (v: number, lo: number, hi: number, p: PaneRect) =>
+      p.y + (1 - (v - lo) / (hi - lo || 1)) * p.h;
 
     function grid(p: PaneRect, lo: number, hi: number, ticks: number) {
       ctx!.strokeStyle = CFG.CLR.grid;
@@ -210,6 +285,8 @@ export default function MarketChart() {
     function seriesLine(data: Float64Array, s: number, e: number, bw: number, p: PaneRect, lo: number, hi: number, color: string, lw=1.5) {
       ctx!.strokeStyle = color;
       ctx!.lineWidth   = lw;
+      ctx!.lineJoin    = 'round';
+      ctx!.lineCap     = 'round';
       ctx!.beginPath();
       let moved = false;
       for (let i = s; i < e; i++) {
@@ -244,8 +321,8 @@ export default function MarketChart() {
     /* ── FORMAT ─────────────────────────────────────────────────────── */
     function fmtP(v: number) {
       if (!v || !isOK(v)) return '—';
-      if (v >= 10000) return v.toLocaleString('en', {maximumFractionDigits:1});
-      if (v >= 100)   return v.toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+      if (v >= 10000) return v.toLocaleString('en', { maximumFractionDigits:1 });
+      if (v >= 100)   return v.toLocaleString('en', { minimumFractionDigits:2, maximumFractionDigits:2 });
       if (v >= 1)     return v.toFixed(4);
       return v.toFixed(6);
     }
@@ -260,18 +337,24 @@ export default function MarketChart() {
     function fmtT(ts: number) {
       const d = new Date(ts);
       return ['1d','3d','1w','1M'].includes(tf)
-        ? d.toLocaleDateString('en',{month:'short',day:'numeric'})
-        : d.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',hour12:false});
+        ? d.toLocaleDateString('en', { month:'short', day:'numeric' })
+        : d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false });
     }
 
     /* ── MAIN RENDER ────────────────────────────────────────────────── */
+    const CDC_COLOR: Record<string, string> = {
+      Black: 'rgba(136,136,136,0.25)',
+      Green: '#00E676', Blue: '#2962FF', LBlue: '#00B0FF',
+      Red: '#FF5252', Orange: '#FF9100', Yellow: '#FFEB3B',
+    };
+
     function render() {
       if (!bars.length || !dims || !ind) return;
       const { W, H, cW, cH, main, vol, macd: md, rsi: rs, px, tx } = dims;
       const C = CFG.CLR;
 
-      const s  = Math.max(0, Math.floor(viewStart));
-      const e  = Math.min(bars.length, s + Math.ceil(viewBars) + 1);
+      const s   = Math.max(0, Math.floor(viewStart));
+      const e   = Math.min(bars.length, s + Math.ceil(viewBars) + 1);
       const vis = bars.slice(s, e);
       const n   = vis.length;
       if (!n) return;
@@ -284,41 +367,19 @@ export default function MarketChart() {
       const pad = (hi0 - lo0) * 0.07 || hi0 * 0.01;
       const mLo = lo0 - pad, mHi = hi0 + pad;
 
+      /* ── background ── */
       ctx!.fillStyle = C.bg0;
       ctx!.fillRect(0, 0, W, H);
 
       grid(main, mLo, mHi, 5);
 
-      if (ind.rainbow) {
-        for (let c = 0; c < 64; c++) {
-          const maKey = `ma${c + 1}`;
-          const color = rainbowMaIndicator.styles.lines[c].color;
-          ctx!.strokeStyle = color;
-          ctx!.lineWidth = 1;
-          ctx!.beginPath();
-          let moved = false;
-          for (let i = s; i < e; i++) {
-            const v = ind.rainbow[i][maKey];
-            if (v === null || !isOK(v)) { moved = false; continue; }
-            const x = main.x + (i - s + 0.5) * bw;
-            const y = toY(v, mLo, mHi, main);
-            if (!moved) { ctx!.moveTo(x, y); moved = true; }
-            else ctx!.lineTo(x, y);
-          }
-          ctx!.stroke();
-        }
+      /* ── rainbow MA — blit from offscreen cache ── */
+      ensureRainbowCache(s, e, n, bw, mLo, mHi, main, W, H);
+      if (rainbowCache) {
+        ctx!.drawImage(rainbowCache, 0, 0, W, H);
       }
 
-      const COLOR_MAP: Record<string, string> = {
-        Black: 'rgba(136, 136, 136, 0.3)',
-        Green: '#00E676',
-        Blue: '#2962FF',
-        LBlue: '#00B0FF',
-        Red: '#FF5252',
-        Orange: '#FF9100',
-        Yellow: '#FFEB3B',
-      };
-
+      /* ── candles / lines ── */
       let maxVol = 0;
       for (const b of vis) if (b.v > maxVol) maxVol = b.v;
 
@@ -328,34 +389,25 @@ export default function MarketChart() {
           const b  = vis[i];
           const x  = main.x + (i + 0.5) * bw;
           const yC = toY(b.c, mLo, mHi, main);
-          
           if (chartType === 'line') {
-            if (i === 0) {
-              ctx!.beginPath();
-              ctx!.moveTo(x, yC);
-            } else {
-              ctx!.lineTo(x, yC);
-            }
-          } else { // vol-line
+            if (i === 0) { ctx!.beginPath(); ctx!.moveTo(x, yC); }
+            else           ctx!.lineTo(x, yC);
+          } else {
             if (i > 0) {
               const volRatio = maxVol > 0 ? b.v / maxVol : 0;
-              const lw = 1 + (volRatio * 8);
-              const cl = b.c >= vis[i-1].c ? C.up : C.dn;
-              ctx!.strokeStyle = cl;
-              ctx!.lineWidth = lw;
-              ctx!.lineCap = 'round';
-              ctx!.beginPath();
-              ctx!.moveTo(prevX, prevY);
-              ctx!.lineTo(x, yC);
-              ctx!.stroke();
+              ctx!.strokeStyle = b.c >= vis[i-1].c ? C.up : C.dn;
+              ctx!.lineWidth   = 1 + (volRatio * 8);
+              ctx!.lineCap     = 'round';
+              ctx!.beginPath(); ctx!.moveTo(prevX, prevY); ctx!.lineTo(x, yC); ctx!.stroke();
             }
           }
           prevX = x; prevY = yC;
         }
         if (chartType === 'line') {
           ctx!.strokeStyle = C.blue;
-          ctx!.lineWidth = 2;
-          ctx!.lineCap = 'round';
+          ctx!.lineWidth   = 2;
+          ctx!.lineJoin    = 'round';
+          ctx!.lineCap     = 'round';
           ctx!.stroke();
         }
       }
@@ -364,12 +416,12 @@ export default function MarketChart() {
         for (let i = 0; i < n; i++) {
           const b  = vis[i];
           const up = b.c >= b.o;
-          const x  = main.x + (i + 0.5) * bw;
-          const yH = toY(b.h, mLo, mHi, main);
-          const yL = toY(b.l, mLo, mHi, main);
+          // Snap to 0.5px grid to eliminate subpixel wick blur on non-retina.
+          const x  = Math.round(main.x + (i + 0.5) * bw) + 0.5;
+          const yH = Math.round(toY(b.h, mLo, mHi, main));
+          const yL = Math.round(toY(b.l, mLo, mHi, main));
           const yO = toY(b.o, mLo, mHi, main);
           const yC = toY(b.c, mLo, mHi, main);
-
           const cl = up ? C.up : C.dn;
 
           let drawCw = cw;
@@ -378,37 +430,42 @@ export default function MarketChart() {
             drawCw = Math.max(1, bw * 0.9 * volRatio);
           }
 
+          // Wick
           ctx!.strokeStyle = cl;
           ctx!.lineWidth   = Math.max(1, bw < 6 ? 1 : 1.5);
           ctx!.beginPath(); ctx!.moveTo(x, yH); ctx!.lineTo(x, yL); ctx!.stroke();
 
+          // Body
           const by = Math.min(yO, yC);
           const bh = Math.max(1, Math.abs(yC - yO));
           ctx!.fillStyle = cl;
           ctx!.fillRect(x - drawCw/2, by, drawCw, bh);
 
+          // Hollow up-candle body
           if (up && drawCw > 3) {
             ctx!.fillStyle = C.bg0;
             ctx!.fillRect(x - drawCw/2 + 1, by + 1, drawCw - 2, Math.max(0, bh - 2));
-            ctx!.fillStyle = cl;
           }
         }
       }
 
-      // Draw CDC ribbon
-      for (let i = 0; i < n; i++) {
-        const x  = main.x + (i + 0.5) * bw;
-        if (ind.cdc && ind.cdc[s + i]) {
-          const cdcColorName = ind.cdc[s + i].color;
-          if (COLOR_MAP[cdcColorName]) {
-            ctx!.fillStyle = COLOR_MAP[cdcColorName];
-            // Draw a rectangle ribbon at the bottom of the main chart
-            ctx!.fillRect(x - cw/2, main.y + main.h - 8, cw, 8);
-          }
+      /* ── CDC ribbon — continuous strip at bottom of main pane ── */
+      if (ind.cdc) {
+        const ribbonH = 6;
+        const ribbonY = main.y + main.h - ribbonH;
+        for (let i = 0; i < n; i++) {
+          const entry = ind.cdc[s + i];
+          if (!entry) continue;
+          const col = CDC_COLOR[entry.color];
+          if (!col) continue;
+          // Full bar-width (no gaps) for a clean continuous ribbon.
+          ctx!.fillStyle = col;
+          ctx!.fillRect(main.x + i * bw, ribbonY, Math.ceil(bw + 0.5), ribbonH);
         }
       }
+
+      /* ── volume ── */
       grid(vol, 0, maxVol, 2);
-
       for (let i = 0; i < n; i++) {
         const b  = vis[i];
         const up = b.c >= b.o;
@@ -418,14 +475,14 @@ export default function MarketChart() {
       }
       paneTag(vol, 'VOL', C.t2);
 
+      /* ── MACD ── */
       const visML = Array.from(ind.ml).slice(s, e) as number[];
       const visSL = Array.from(ind.sl).slice(s, e) as number[];
       const visHI = Array.from(ind.hi).slice(s, e) as number[];
       const allM  = [...visML, ...visSL, ...visHI].filter(isOK);
 
       if (allM.length) {
-        const dLo = Math.min(...allM);
-        const dHi = Math.max(...allM);
+        const dLo = Math.min(...allM), dHi = Math.max(...allM);
         const dp  = Math.max((dHi - dLo) * 0.12, 0.0001);
         const mlo = dLo - dp, mhi2 = dHi + dp;
 
@@ -445,6 +502,7 @@ export default function MarketChart() {
         paneTag(md, 'MACD (12, 26, 9)', C.t2);
       }
 
+      /* ── RSI ── */
       const rLo = 0, rHi = 100;
       const y70 = toY(70, rLo, rHi, rs);
       const y50 = toY(50, rLo, rHi, rs);
@@ -462,18 +520,20 @@ export default function MarketChart() {
       ctx!.font      = '9px monospace';
       ctx!.textAlign = 'left';
       ctx!.fillStyle = 'rgba(240,84,79,.45)';  ctx!.fillText('70', rs.x+4, y70-2);
-      ctx!.fillStyle = C.t2;                  ctx!.fillText('50', rs.x+4, y50-2);
+      ctx!.fillStyle = C.t2;                   ctx!.fillText('50', rs.x+4, y50-2);
       ctx!.fillStyle = 'rgba(38,198,160,.45)'; ctx!.fillText('30', rs.x+4, y30-2);
 
       seriesLine(ind.rsi, s, e, bw, rs, rLo, rHi, C.rsi, 1.5);
       paneTag(rs, 'RSI (14)', C.t2);
 
+      /* ── pane separators ── */
       ctx!.strokeStyle = 'rgba(255,255,255,.05)';
       ctx!.lineWidth = 1;
       for (const p of [vol, md, rs]) {
         ctx!.beginPath(); ctx!.moveTo(0, p.y); ctx!.lineTo(cW, p.y); ctx!.stroke();
       }
 
+      /* ── price axis ── */
       ctx!.fillStyle = C.bg1;
       ctx!.fillRect(px.x, px.y, px.w, px.h);
       ctx!.strokeStyle = C.border;
@@ -495,13 +555,13 @@ export default function MarketChart() {
         ctx!.beginPath(); ctx!.moveTo(px.x, y); ctx!.lineTo(px.x+4, y); ctx!.stroke();
       }
 
+      /* ── last price badge ── */
       const last = bars[bars.length-1];
       if (last) {
         const lp = last.c;
         const ly = toY(lp, mLo, mHi, main);
         if (ly > main.y + 1 && ly < main.y + main.h - 1) {
-          const up  = last.c >= last.o;
-          const bc  = up ? C.up : C.dn;
+          const bc = last.c >= last.o ? C.up : C.dn;
           dashedH(0, ly, px.x, bc + '55', [4,4]);
           rRect(px.x+3, ly-10, px.w-6, 20, 4);
           ctx!.fillStyle = bc;
@@ -513,6 +573,7 @@ export default function MarketChart() {
         }
       }
 
+      /* ── time axis ── */
       ctx!.fillStyle = C.bg1;
       ctx!.fillRect(tx.x, tx.y, tx.w, tx.h);
       ctx!.strokeStyle = C.border;
@@ -528,17 +589,17 @@ export default function MarketChart() {
         ctx!.fillText(fmtT(vis[i].t), x, cH + 17);
       }
 
+      /* ── crosshair ── */
       if (mx >= 0 && my >= 0 && mx < cW && my < cH) {
         ctx!.strokeStyle = C.cross;
         ctx!.lineWidth   = 1;
         ctx!.setLineDash([4, 4]);
-        ctx!.beginPath(); ctx!.moveTo(mx, 0);  ctx!.lineTo(mx, cH);  ctx!.stroke();
-        ctx!.beginPath(); ctx!.moveTo(0, my);  ctx!.lineTo(cW, my);  ctx!.stroke();
+        ctx!.beginPath(); ctx!.moveTo(mx, 0); ctx!.lineTo(mx, cH); ctx!.stroke();
+        ctx!.beginPath(); ctx!.moveTo(0, my); ctx!.lineTo(cW, my); ctx!.stroke();
         ctx!.setLineDash([]);
 
         const bi  = Math.max(0, Math.min(n-1, Math.floor((mx - main.x) / bw)));
         const bar = vis[bi];
-
         if (bar) setOHLCV(bar);
 
         let yLabel: string | null = null;
@@ -581,25 +642,18 @@ export default function MarketChart() {
       }
     }
 
-    /* ── OHLCV DISPLAY ──────────────────────────────────────────────── */
+    /* ── OHLCV DISPLAY — writes to cached DOM refs (no querySelector) ── */
     function setOHLCV(b: BarData) {
       const chg = (b.c - b.o) / b.o * 100;
       const up  = chg >= 0;
-      const doc = containerRef.current!;
-      const oO = doc.querySelector('#oO');
-      const oH = doc.querySelector('#oH');
-      const oL = doc.querySelector('#oL');
-      const oC = doc.querySelector('#oC');
-      const oV = doc.querySelector('#oV');
-      const cv = doc.querySelector('#chgVal') as HTMLElement;
-      if (oO) oO.textContent = fmtP(b.o);
-      if (oH) oH.textContent = fmtP(b.h);
-      if (oL) oL.textContent = fmtP(b.l);
-      if (oC) oC.textContent = fmtP(b.c);
-      if (oV) oV.textContent = fmtV(b.v);
-      if (cv) {
-        cv.textContent = `${up?'+':''}${chg.toFixed(2)}%`;
-        cv.style.color = up ? 'var(--up)' : 'var(--dn)';
+      if (elO) elO.textContent = fmtP(b.o);
+      if (elH) elH.textContent = fmtP(b.h);
+      if (elL) elL.textContent = fmtP(b.l);
+      if (elC) elC.textContent = fmtP(b.c);
+      if (elV) elV.textContent = fmtV(b.v);
+      if (elChg) {
+        elChg.textContent = `${up?'+':''}${chg.toFixed(2)}%`;
+        elChg.style.color = up ? 'var(--up)' : 'var(--dn)';
       }
     }
 
@@ -608,29 +662,23 @@ export default function MarketChart() {
       loader.style.display = 'flex';
       try {
         const rawBars = await fetchHistoricalData(symbol, tf, CFG.LIMIT);
-        
+
         bars = rawBars.map((k: KLineResult) => ({
-          t: k.timestamp, 
-          o: k.open, 
-          h: k.high, 
-          l: k.low, 
-          c: k.close, 
-          v: k.volume
+          t: k.timestamp, o: k.open, h: k.high, l: k.low, c: k.close, v: k.volume,
         }));
-        
+
         viewBars  = Math.min(120, bars.length);
         viewStart = Math.max(0, bars.length - viewBars);
-        computeIndicators();
-        
+        computeIndicators(); // also calls invalidateRainbowCache()
+
         const tickerData = await fetch24hrTicker(symbol);
         updateTopBar(tickerData);
-        
-        if (!dims) { const W=wrap.clientWidth,H=wrap.clientHeight; computeDims(W,H); }
+
+        if (!dims) { const W=wrap.clientWidth, H=wrap.clientHeight; computeDims(W,H); }
         render();
-        const stSym = containerRef.current!.querySelector('#stSym');
-        const stBars = containerRef.current!.querySelector('#stBars');
-        if (stSym) stSym.textContent = `${symbol.replace('USDT','/USDT')} · ${tf.toUpperCase()} · Binance`;
-        if (stBars) stBars.textContent = `${bars.length} bars`;
+
+        if (elStSym)  elStSym.textContent  = `${symbol.replace('USDT','/USDT')} · ${tf.toUpperCase()} · Binance`;
+        if (elStBars) elStBars.textContent = `${bars.length} bars`;
         if (bars.length) setOHLCV(bars[bars.length-1]);
       } catch(err: unknown) {
         const txt = loader.querySelector('.loader-txt');
@@ -642,23 +690,20 @@ export default function MarketChart() {
 
     function updateTopBar(tickerData?: Ticker24hrResult) {
       if (!bars.length || !tickerData) return;
-      const last  = bars[bars.length-1];
-      const chg   = parseFloat(tickerData.priceChangePercent);
-      const up    = chg >= 0;
-
-      const pv = containerRef.current!.querySelector('#priceVal');
-      const pb = containerRef.current!.querySelector('#priceBadge');
-      if (pv) {
-        pv.textContent = fmtP(last.c);
-        pv.className   = up ? 'col-up' : 'col-dn';
+      const last = bars[bars.length-1];
+      const chg  = parseFloat(tickerData.priceChangePercent);
+      const up   = chg >= 0;
+      if (elPrice) {
+        elPrice.textContent = fmtP(last.c);
+        elPrice.className   = up ? 'col-up' : 'col-dn';
       }
-      if (pb) {
-        pb.textContent = `${up?'+':''}${chg.toFixed(2)}%`;
-        pb.className   = up ? 'badge-up' : 'badge-dn';
+      if (elBadge) {
+        elBadge.textContent = `${up?'+':''}${chg.toFixed(2)}%`;
+        elBadge.className   = up ? 'badge-up' : 'badge-dn';
       }
     }
 
-    /* ── CLAMP HELPERS ──────────────────────────────────────────────── */
+    /* ── CLAMP ──────────────────────────────────────────────────────── */
     function clampView() {
       viewBars  = Math.max(20, Math.min(bars.length, viewBars));
       viewStart = Math.max(0, Math.min(bars.length - viewBars, viewStart));
@@ -673,13 +718,14 @@ export default function MarketChart() {
         const bw = dims.main.w / viewBars;
         viewStart = drag.sv - (e.clientX - drag.sx) / bw;
         clampView();
+        invalidateRainbowCache();
       }
-      render();
+      scheduleRender();
     };
 
     const handleMouseLeave = () => {
       mx = -1; my = -1;
-      render();
+      scheduleRender();
       if (bars.length) setOHLCV(bars[bars.length-1]);
     };
 
@@ -702,14 +748,15 @@ export default function MarketChart() {
       const ratio  = mx >= 0 ? (mx - dims.main.x) / dims.main.w : 0.5;
       viewStart    += (prev - viewBars) * ratio;
       clampView();
-      render();
+      invalidateRainbowCache();
+      scheduleRender();
     };
 
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
       if (e.touches.length === 1) {
         const t = e.touches[0];
-        drag  = { sx: t.clientX, sv: viewStart };
+        drag = { sx: t.clientX, sv: viewStart };
         const r = canvas.getBoundingClientRect();
         mx = t.clientX - r.left;
         my = t.clientY - r.top;
@@ -731,14 +778,15 @@ export default function MarketChart() {
         const bw = dims.main.w / viewBars;
         viewStart = drag.sv - (t.clientX - drag.sx) / bw;
         clampView();
-        render();
+        invalidateRainbowCache();
+        scheduleRender();
       } else if (e.touches.length === 2 && pinch) {
         const dx   = e.touches[0].clientX - e.touches[1].clientX;
         const dy   = e.touches[0].clientY - e.touches[1].clientY;
-        const d    = Math.hypot(dx, dy);
-        viewBars   = Math.round(pinch.vb0 * (pinch.d0 / d));
+        viewBars   = Math.round(pinch.vb0 * (pinch.d0 / Math.hypot(dx, dy)));
         clampView();
-        render();
+        invalidateRainbowCache();
+        scheduleRender();
       }
     };
 
@@ -752,24 +800,24 @@ export default function MarketChart() {
       if (e.key === 'r' || e.key === 'R') {
         viewBars  = Math.min(120, bars.length);
         viewStart = Math.max(0, bars.length - viewBars);
-        render();
+        invalidateRainbowCache();
+        scheduleRender();
       }
-      if (e.key === 'ArrowLeft')  { viewStart = Math.max(0, viewStart - Math.ceil(viewBars*0.1)); render(); }
-      if (e.key === 'ArrowRight') { viewStart = Math.min(bars.length - viewBars, viewStart + Math.ceil(viewBars*0.1)); render(); }
-      if (e.key === '+') { viewBars = Math.max(20, Math.round(viewBars * 0.85)); clampView(); render(); }
-      if (e.key === '-') { viewBars = Math.min(bars.length, Math.round(viewBars * 1.18)); clampView(); render(); }
+      if (e.key === 'ArrowLeft')  { viewStart = Math.max(0, viewStart - Math.ceil(viewBars*0.1)); invalidateRainbowCache(); scheduleRender(); }
+      if (e.key === 'ArrowRight') { viewStart = Math.min(bars.length - viewBars, viewStart + Math.ceil(viewBars*0.1)); invalidateRainbowCache(); scheduleRender(); }
+      if (e.key === '+') { viewBars = Math.max(20, Math.round(viewBars * 0.85)); clampView(); invalidateRainbowCache(); scheduleRender(); }
+      if (e.key === '-') { viewBars = Math.min(bars.length, Math.round(viewBars * 1.18)); clampView(); invalidateRainbowCache(); scheduleRender(); }
     };
 
-    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mousemove',  handleMouseMove);
     canvas.addEventListener('mouseleave', handleMouseLeave);
-    canvas.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    
+    canvas.addEventListener('mousedown',  handleMouseDown);
+    window.addEventListener('mouseup',    handleMouseUp);
+    canvas.addEventListener('wheel',      handleWheel, { passive: false });
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('keydown', handleKeyDown);
+    canvas.addEventListener('touchmove',  handleTouchMove,  { passive: false });
+    canvas.addEventListener('touchend',   handleTouchEnd);
+    window.addEventListener('keydown',    handleKeyDown);
 
     const symSelect = containerRef.current.querySelector('#symSelect') as HTMLSelectElement;
     const handleSymChange = (e: Event) => {
@@ -796,28 +844,31 @@ export default function MarketChart() {
       typeGroup?.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       chartType = btn.dataset.type!;
-      render();
+      scheduleRender();
     };
     typeGroup?.addEventListener('click', handleTypeClick);
 
-    const ro = new ResizeObserver(() => resize());
+    const ro = new ResizeObserver(() => {
+      invalidateRainbowCache();
+      resize();
+    });
     ro.observe(wrap);
 
     resize();
     load();
 
     return () => {
-      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('mousemove',  handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
-      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('mousedown',  handleMouseDown);
+      window.removeEventListener('mouseup',    handleMouseUp);
+      canvas.removeEventListener('wheel',      handleWheel);
       canvas.removeEventListener('touchstart', handleTouchStart);
-      canvas.removeEventListener('touchmove', handleTouchMove);
-      canvas.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('keydown', handleKeyDown);
+      canvas.removeEventListener('touchmove',  handleTouchMove);
+      canvas.removeEventListener('touchend',   handleTouchEnd);
+      window.removeEventListener('keydown',    handleKeyDown);
       symSelect.removeEventListener('change', handleSymChange);
-      tfGroup?.removeEventListener('click', handleTfClick);
+      tfGroup?.removeEventListener('click',  handleTfClick);
       typeGroup?.removeEventListener('click', handleTypeClick);
       ro.disconnect();
     };

@@ -18,8 +18,6 @@
   --dn-dim:    rgba(240,84,79,.15);
   --blue:      #4c7cfc;
   --blue-dim:  rgba(76,124,252,.18);
-  --ema9:      #f5a623;
-  --ema21:     #6ab4f0;
   --macd-ml:   #4c7cfc;
   --macd-sl:   #f5623a;
   --rsi:       #c386f8;
@@ -30,7 +28,7 @@
   flex-direction: column;
   background: var(--bg0);
   color: var(--t0);
-  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -63,6 +61,8 @@
   background-clip: text;
   white-space: nowrap;
   flex-shrink: 0;
+  /* Subtle depth via drop-shadow on the element, not text-shadow (incompatible with clip) */
+  filter: drop-shadow(0 0 8px rgba(76,124,252,.35));
 }
 
 .trade-hard-theme .v-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
@@ -80,9 +80,13 @@
   background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23828aaa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
-  transition: border-color .15s;
+  transition: border-color .18s ease, box-shadow .18s ease;
 }
-.trade-hard-theme .sym-select:hover, .trade-hard-theme .sym-select:focus { border-color: var(--blue); }
+.trade-hard-theme .sym-select:hover,
+.trade-hard-theme .sym-select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(76,124,252,.15);
+}
 
 .trade-hard-theme .tf-group { display: flex; align-items: center; gap: 1px; }
 .trade-hard-theme .tf-btn {
@@ -93,11 +97,16 @@
   padding: 5px 9px;
   border-radius: 5px;
   cursor: pointer;
-  transition: background .12s, color .12s;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
   white-space: nowrap;
 }
 .trade-hard-theme .tf-btn:hover  { background: var(--bg2); color: var(--t0); }
-.trade-hard-theme .tf-btn.active { background: var(--blue-dim); color: var(--blue); font-weight: 700; }
+.trade-hard-theme .tf-btn.active {
+  background: var(--blue-dim);
+  color: var(--blue);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(76,124,252,.3);
+}
 
 .trade-hard-theme .price-block { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
 .trade-hard-theme #priceVal {
@@ -105,12 +114,14 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.5px;
+  transition: color .2s ease;
 }
 .trade-hard-theme #priceBadge {
   font-size: 12px;
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 4px;
+  transition: background .2s ease, color .2s ease;
 }
 
 .trade-hard-theme .col-up   { color: var(--up); }
@@ -160,7 +171,7 @@
 }
 .trade-hard-theme .ohlcv-row .lbl { color: var(--t2); margin-right: 2px; }
 .trade-hard-theme .ohlcv-row .val { color: var(--t0); }
-.trade-hard-theme #chgVal { font-weight: 700; }
+.trade-hard-theme #chgVal { font-weight: 700; transition: color .15s ease; }
 
 /* ═══════════════════════════════════════════════════════════════════
    CHART WRAPPER + CANVAS
@@ -177,6 +188,8 @@
   inset: 0;
   cursor: crosshair;
   touch-action: none;
+  /* Promote canvas to its own compositor layer for smoother paints */
+  will-change: transform;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -192,14 +205,14 @@
   justify-content: center;
   gap: 16px;
   z-index: 99;
-  transition: opacity .3s;
+  transition: opacity .3s ease;
 }
 .trade-hard-theme .ring {
   width: 36px; height: 36px;
   border: 3px solid var(--bg3);
   border-top-color: var(--blue);
   border-radius: 50%;
-  animation: spin 0.75s linear infinite;
+  animation: chart-spin 0.75s linear infinite;
 }
 .trade-hard-theme .loader-txt { font-size: 12px; color: var(--t1); }
 
@@ -224,7 +237,21 @@
   border-radius: 50%;
   background: var(--up);
   box-shadow: 0 0 6px var(--up);
-  animation: pulse 2.2s ease-in-out infinite;
+  animation: chart-pulse 2.2s ease-in-out infinite;
   flex-shrink: 0;
 }
 .trade-hard-theme .statusbar span { color: var(--t1); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAMES — scoped with 'chart-' prefix to avoid collisions
+═══════════════════════════════════════════════════════════════════ */
+@keyframes chart-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes chart-pulse {
+  0%   { opacity: 1;   box-shadow: 0 0 0   0   rgba(38,198,160,.8); }
+  50%  { opacity: 0.6; box-shadow: 0 0 0   5px rgba(38,198,160,0); }
+  100% { opacity: 1;   box-shadow: 0 0 0   0   rgba(38,198,160,0); }
+}

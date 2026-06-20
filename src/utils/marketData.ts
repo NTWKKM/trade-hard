@@ -21,9 +21,9 @@ export interface Ticker24hrResult {
 // Binance kline format: [openTime, open, high, low, close, volume, closeTime, ...]
 type BinanceKline = [number, string, string, string, string, string, number, string, number, string, string, string];
 
-async function fetchBinanceUiKlines(symbol: string, interval: string, limit: number): Promise<KLineResult[]> {
+async function fetchBinanceUiKlines(symbol: string, interval: string, limit: number, signal: AbortSignal): Promise<KLineResult[]> {
   const url = `https://api.binance.com/api/v3/uiKlines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
   const data: BinanceKline[] = await response.json();
   if (!Array.isArray(data)) throw new Error('Binance API returned unexpected data format');
@@ -54,8 +54,8 @@ export async function fetchHistoricalData(
   const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const result = await fetchBinanceUiKlines(symbol, interval, limit);
-    return result;
+    // Pass signal so the 15s timeout actually cancels the in-flight request.
+    return await fetchBinanceUiKlines(symbol, interval, limit, controller.signal);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('Request timed out after 15 seconds', { cause: error });
