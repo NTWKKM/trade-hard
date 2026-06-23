@@ -25,19 +25,19 @@ export default function MarketChart() {
       RATIO:   { main: .56, vol: .12, macd: .16, rsi: .16 },
       LIMIT:   300,
       CLR: {
-        bg0:'#0f1117', bg1:'#1a1e2e', bg2:'#242838', bg3:'#2c3044',
-        border:'#30354a', bordeHi:'#454c6a',
-        t0:'#dde1f0', t1:'#828aaa', t2:'#4a5070',
-        grid:'rgba(255,255,255,.04)',
-        up:'#26c6a0', dn:'#f0544f',
-        upDim:'rgba(38,198,160,.4)', dnDim:'rgba(240,84,79,.4)',
-        macdML:'#4c7cfc', macdSL:'#f5623a',
-        histUp:'rgba(38,198,160,.6)', histDn:'rgba(240,84,79,.6)',
-        rsi:'#c386f8',
-        obFill:'rgba(240,84,79,.06)', osFill:'rgba(38,198,160,.06)',
-        obLine:'rgba(240,84,79,.22)', osLine:'rgba(38,198,160,.22)',
-        cross:'rgba(180,190,210,.22)',
-        blue:'#4c7cfc', blueDim:'rgba(76,124,252,.22)',
+        bg0:'#282a36', bg1:'#21222c', bg2:'#44475a', bg3:'#6272a4',
+        border:'#44475a', bordeHi:'#6272a4',
+        t0:'#f8f8f2', t1:'#e9e9e4', t2:'#6272a4',
+        grid:'rgba(248,248,242,.05)',
+        up:'#50fa7b', dn:'#ff5555',
+        upDim:'rgba(80,250,123,.4)', dnDim:'rgba(255,85,85,.4)',
+        macdML:'#8be9fd', macdSL:'#ffb86c',
+        histUp:'rgba(80,250,123,.6)', histDn:'rgba(255,85,85,.6)',
+        rsi:'#ff79c6',
+        obFill:'rgba(255,85,85,.06)', osFill:'rgba(80,250,123,.06)',
+        obLine:'rgba(255,85,85,.22)', osLine:'rgba(80,250,123,.22)',
+        cross:'rgba(248,248,242,.22)',
+        blue:'#bd93f9', blueDim:'rgba(189,147,249,.22)',
       },
     };
 
@@ -317,6 +317,19 @@ export default function MarketChart() {
       }
     }
 
+    function getTfMs(tfStr: string) {
+      const unit = tfStr.slice(-1);
+      const val = parseInt(tfStr);
+      switch(unit) {
+        case 'm': return val * 60000;
+        case 'h': return val * 3600000;
+        case 'd': return val * 86400000;
+        case 'w': return val * 604800000;
+        case 'M': return val * 2592000000;
+      }
+      return 60000;
+    }
+
     /* ── FORMAT ─────────────────────────────────────────────────────── */
     function fmtP(v: number) {
       if (!v || !isOK(v)) return '—';
@@ -335,16 +348,21 @@ export default function MarketChart() {
 
     function fmtT(ts: number) {
       const d = new Date(ts);
-      return ['1d','3d','1w','1M'].includes(tf)
-        ? d.toLocaleDateString('en', { month:'short', day:'numeric' })
-        : d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false });
+      const opts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Bangkok' };
+      if (['1d','3d','1w','1M'].includes(tf)) {
+        opts.month = 'short'; opts.day = 'numeric';
+        return d.toLocaleDateString('en', opts);
+      } else {
+        opts.hour = '2-digit'; opts.minute = '2-digit'; opts.hour12 = false;
+        return d.toLocaleTimeString('en', opts);
+      }
     }
 
     /* ── MAIN RENDER ────────────────────────────────────────────────── */
     const CDC_COLOR: Record<string, string> = {
-      Black: 'rgba(136,136,136,0.25)',
-      Green: '#00E676', Blue: '#2962FF', LBlue: '#00B0FF',
-      Red: '#FF5252', Orange: '#FF9100', Yellow: '#FFEB3B',
+      Black: 'rgba(98, 114, 164, 0.25)',
+      Green: '#50fa7b', Blue: '#bd93f9', LBlue: '#8be9fd',
+      Red: '#ff5555', Orange: '#ffb86c', Yellow: '#f1fa8c',
     };
 
     function render() {
@@ -358,7 +376,7 @@ export default function MarketChart() {
       const n   = vis.length;
       if (!n) return;
 
-      const bw = main.w / n;
+      const bw = main.w / viewBars;
       const cw = Math.max(1, bw * 0.72);
 
       let lo0 = vis[0].l, hi0 = vis[0].h;
@@ -569,6 +587,17 @@ export default function MarketChart() {
           ctx!.font      = 'bold 11px monospace';
           ctx!.textAlign = 'center';
           ctx!.fillText(fmtP(lp), px.x + px.w/2, ly+4);
+
+          const rem = Math.max(0, last.t + getTfMs(tf) - Date.now());
+          if (rem > 0 && rem < 86400000) {
+            const hh = Math.floor(rem / 3600000).toString().padStart(2, '0');
+            const mm = Math.floor((rem % 3600000) / 60000).toString().padStart(2, '0');
+            const ss = Math.floor((rem % 60000) / 1000).toString().padStart(2, '0');
+            const text = hh === '00' ? `${mm}:${ss}` : `${hh}:${mm}:${ss}`;
+            ctx!.fillStyle = C.t1;
+            ctx!.font = '10px monospace';
+            ctx!.fillText(text, px.x + px.w/2, ly + 22);
+          }
         }
       }
 
@@ -686,7 +715,7 @@ export default function MarketChart() {
             bars.push(newBar);
             // Keep within LIMIT
             if (bars.length > CFG.LIMIT) bars.shift();
-            viewStart = Math.max(0, Math.min(bars.length - viewBars, viewStart));
+            viewStart = Math.max(0, Math.min(bars.length - viewBars * 0.8, viewStart));
           }
           if (elStBars) elStBars.textContent = `${bars.length} bars`;
           if (bars.length) setOHLCV(bars[bars.length - 1]);
@@ -737,7 +766,7 @@ export default function MarketChart() {
         }));
 
         viewBars  = Math.min(120, bars.length);
-        viewStart = Math.max(0, bars.length - viewBars);
+        viewStart = Math.max(0, bars.length - viewBars * 0.8);
         computeIndicators(); // also calls invalidateRainbowCache()
 
         if (!dims) { const W=wrap.clientWidth, H=wrap.clientHeight; computeDims(W,H); }
@@ -779,7 +808,8 @@ export default function MarketChart() {
     /* ── CLAMP ──────────────────────────────────────────────────────── */
     function clampView() {
       viewBars  = Math.max(20, Math.min(bars.length, viewBars));
-      viewStart = Math.max(0, Math.min(bars.length - viewBars, viewStart));
+      const maxScroll = bars.length - viewBars * 0.8;
+      viewStart = Math.max(0, Math.min(maxScroll, viewStart));
     }
 
     /* ── EVENT HANDLERS ─────────────────────────────────────────────── */
@@ -872,12 +902,12 @@ export default function MarketChart() {
       if (!bars.length) return;
       if (e.key === 'r' || e.key === 'R') {
         viewBars  = Math.min(120, bars.length);
-        viewStart = Math.max(0, bars.length - viewBars);
+        viewStart = Math.max(0, bars.length - viewBars * 0.8);
         invalidateRainbowCache();
         scheduleRender();
       }
       if (e.key === 'ArrowLeft')  { viewStart = Math.max(0, viewStart - Math.ceil(viewBars*0.1)); invalidateRainbowCache(); scheduleRender(); }
-      if (e.key === 'ArrowRight') { viewStart = Math.min(bars.length - viewBars, viewStart + Math.ceil(viewBars*0.1)); invalidateRainbowCache(); scheduleRender(); }
+      if (e.key === 'ArrowRight') { viewStart = Math.min(bars.length - viewBars * 0.8, viewStart + Math.ceil(viewBars*0.1)); invalidateRainbowCache(); scheduleRender(); }
       if (e.key === '+') { viewBars = Math.max(20, Math.round(viewBars * 0.85)); clampView(); invalidateRainbowCache(); scheduleRender(); }
       if (e.key === '-') { viewBars = Math.min(bars.length, Math.round(viewBars * 1.18)); clampView(); invalidateRainbowCache(); scheduleRender(); }
     };
@@ -1091,7 +1121,12 @@ export default function MarketChart() {
     resize();
     load();
 
+    const tickerInterval = setInterval(() => {
+      if (bars.length > 0) scheduleRender();
+    }, 1000);
+
     return () => {
+      clearInterval(tickerInterval);
       canvas.removeEventListener('mousemove',  handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
       canvas.removeEventListener('mousedown',  handleMouseDown);
