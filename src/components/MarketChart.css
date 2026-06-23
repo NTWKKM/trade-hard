@@ -67,25 +67,105 @@
 
 .trade-hard-theme .v-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
 
-.trade-hard-theme .sym-select {
-  appearance: none;
+.trade-hard-theme .sym-search-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.trade-hard-theme .sym-search-input {
   background: var(--bg2);
   border: 1px solid var(--border);
   color: var(--t0);
   font: 600 13px/1 inherit;
-  padding: 5px 28px 5px 10px;
+  padding: 5px 10px;
   border-radius: 6px;
-  cursor: pointer;
   outline: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23828aaa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
+  width: 120px;
   transition: border-color .18s ease, box-shadow .18s ease;
 }
-.trade-hard-theme .sym-select:hover,
-.trade-hard-theme .sym-select:focus {
+.trade-hard-theme .sym-search-input:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 2px rgba(76,124,252,.15);
+}
+
+.trade-hard-theme .star-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--t2);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color .15s ease;
+}
+.trade-hard-theme .star-btn:hover { color: #FFD600; }
+.trade-hard-theme .star-btn.starred { color: #FFD600; }
+
+.trade-hard-theme .sym-search-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  min-width: 160px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  z-index: 100;
+  margin-top: 2px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+
+.trade-hard-theme .sym-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--t0);
+  white-space: nowrap;
+  transition: background .1s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.trade-hard-theme .sym-item:hover,
+.trade-hard-theme .sym-item.active {
+  background: var(--bg3);
+}
+.trade-hard-theme .sym-quote {
+  color: var(--t2);
+  margin-left: 2px;
+}
+.trade-hard-theme .sym-star {
+  color: var(--t2);
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  transition: color .1s ease;
+}
+.trade-hard-theme .sym-star:hover { color: #FFD600; }
+.trade-hard-theme .sym-item.fav .sym-star { color: #FFD600; }
+
+.trade-hard-theme .sym-fav-header {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--t2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(255,255,255,.02);
+}
+.trade-hard-theme .sym-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
 }
 
 .trade-hard-theme .tf-group { display: flex; align-items: center; gap: 1px; }
@@ -215,6 +295,20 @@
   animation: chart-spin 0.75s linear infinite;
 }
 .trade-hard-theme .loader-txt { font-size: 12px; color: var(--t1); }
+.trade-hard-theme .retry-btn {
+  margin-top: 4px;
+  padding: 6px 18px;
+  background: var(--bg3);
+  border: 1px solid var(--blue);
+  color: var(--blue);
+  font: 700 12px/1 inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.trade-hard-theme .retry-btn:hover {
+  background: var(--blue-dim);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    STATUSBAR

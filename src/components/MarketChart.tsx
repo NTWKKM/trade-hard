@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import './MarketChart.css';
-import { fetchHistoricalData, fetch24hrTicker } from '../utils/marketData';
+import { fetchHistoricalData, fetch24hrTicker, fetchTradingSymbols } from '../utils/marketData';
 import type { KLineResult, Ticker24hrResult } from '../utils/marketData';
 import { rainbowMaIndicator } from '../indicators/rainbowMa';
-import { cdcActionZoneIndicator } from '../indicators/cdcActionZone.optimized';
+import { cdcActionZoneIndicator, clearCdcCache } from '../indicators/cdcActionZone.optimized';
 import type { KLineData, Indicator } from 'klinecharts';
 
 export default function MarketChart() {
@@ -110,7 +110,7 @@ export default function MarketChart() {
       rainbowCacheKey = '';
     }
 
-    function ensureRainbowCache(s: number, e: number, n: number, bw: number, mLo: number, mHi: number, main: PaneRect, W: number, H: number) {
+    function ensureRainbowCache(s: number, e: number, bw: number, mLo: number, mHi: number, main: PaneRect, W: number, H: number) {
       const key = getRainbowCacheKey();
       if (rainbowCache && rainbowCacheKey === key) return;
 
@@ -142,7 +142,6 @@ export default function MarketChart() {
 
       rainbowCache    = oc;
       rainbowCacheKey = key;
-      n; // suppress lint — n is used implicitly via loop bounds passed in
     }
 
     /* ── LAYOUT ─────────────────────────────────────────────────────── */
@@ -244,7 +243,7 @@ export default function MarketChart() {
       );
       const cdcData = cdcActionZoneIndicator.calc(
         klineData,
-        { calcParams: cdcActionZoneIndicator.calcParams } as unknown as Indicator<{ signal: number; color: 'Black'|'Green'|'Blue'|'LBlue'|'Red'|'Orange'|'Yellow' }>
+        { name: `CDCActionZone-${symbol}`, calcParams: cdcActionZoneIndicator.calcParams } as unknown as Indicator<{ signal: number; color: 'Black'|'Green'|'Blue'|'LBlue'|'Red'|'Orange'|'Yellow' }>
       );
 
       ind = { ...macd(closes), rsi: calcRsi(closes, 14), rainbow: rainbowData, cdc: cdcData };
@@ -374,7 +373,7 @@ export default function MarketChart() {
       grid(main, mLo, mHi, 5);
 
       /* ── rainbow MA — blit from offscreen cache ── */
-      ensureRainbowCache(s, e, n, bw, mLo, mHi, main, W, H);
+      ensureRainbowCache(s, e, bw, mLo, mHi, main, W, H);
       if (rainbowCache) {
         ctx!.drawImage(rainbowCache, 0, 0, W, H);
       }
@@ -658,8 +657,78 @@ export default function MarketChart() {
     }
 
     /* ── DATA FETCH ─────────────────────────────────────────────────── */
+    let prevSymbol = symbol;
+    let ws: WebSocket | null = null;
+
+    function closeWebSocket() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function openWebSocket() {
+      closeWebSocket();
+      const wsSymbol = symbol.toLowerCase();
+      const stream = `${wsSymbol}@kline_${tf}/${wsSymbol}@ticker`;
+      ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${stream}`);
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        const payload = msg.data;
+
+        // Kline update — update last bar or append new
+        if (payload?.e === 'kline') {
+          const k = payload.k;
+          const newBar: BarData = { t: k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v };
+          if (bars.length && bars[bars.length - 1].t === k.t) {
+            bars[bars.length - 1] = newBar;
+          } else if (k.x) {
+            bars.push(newBar);
+            // Keep within LIMIT
+            if (bars.length > CFG.LIMIT) bars.shift();
+            viewStart = Math.max(0, Math.min(bars.length - viewBars, viewStart));
+          }
+          if (elStBars) elStBars.textContent = `${bars.length} bars`;
+          if (bars.length) setOHLCV(bars[bars.length - 1]);
+          scheduleRender();
+        }
+
+        // Ticker update — update price + badge
+        if (payload?.e === '24hrTicker') {
+          const last = bars[bars.length - 1];
+          if (last) {
+            const chg = parseFloat(payload.P);
+            const up = chg >= 0;
+            if (elPrice) {
+              elPrice.textContent = fmtP(last.c);
+              elPrice.className = up ? 'col-up' : 'col-dn';
+            }
+            if (elBadge) {
+              elBadge.textContent = `${up ? '+' : ''}${chg.toFixed(2)}%`;
+              elBadge.className = up ? 'badge-up' : 'badge-dn';
+            }
+          }
+        }
+      };
+      ws.onerror = () => { /* silent — historical data already loaded */ };
+    }
+
     async function load() {
       loader.style.display = 'flex';
+      const txt = loader.querySelector('.loader-txt') as HTMLElement;
+      const retryBtn = loader.querySelector('.retry-btn') as HTMLElement;
+      if (txt) txt.textContent = 'Fetching market data…';
+      if (retryBtn) retryBtn.style.display = 'none';
+
+      // Clear CDC cache when symbol changes
+      if (prevSymbol !== symbol) {
+        clearCdcCache();
+        prevSymbol = symbol;
+      }
+
+      // Close any existing WebSocket before loading new data
+      closeWebSocket();
+
       try {
         const rawBars = await fetchHistoricalData(symbol, tf, CFG.LIMIT);
 
@@ -671,21 +740,25 @@ export default function MarketChart() {
         viewStart = Math.max(0, bars.length - viewBars);
         computeIndicators(); // also calls invalidateRainbowCache()
 
-        const tickerData = await fetch24hrTicker(symbol);
-        updateTopBar(tickerData);
-
         if (!dims) { const W=wrap.clientWidth, H=wrap.clientHeight; computeDims(W,H); }
         render();
 
         if (elStSym)  elStSym.textContent  = `${symbol.replace('USDT','/USDT')} · ${tf.toUpperCase()} · Binance`;
         if (elStBars) elStBars.textContent = `${bars.length} bars`;
         if (bars.length) setOHLCV(bars[bars.length-1]);
+
+        // Ticker is non-blocking — fetch separately, don't hold up the chart
+        fetch24hrTicker(symbol).then(updateTopBar).catch(() => { /* non-fatal */ });
+
+        // Open WebSocket for real-time updates
+        openWebSocket();
+
+        loader.style.display = 'none';
       } catch(err: unknown) {
-        const txt = loader.querySelector('.loader-txt');
         if (txt) txt.textContent = `Error: ${err instanceof Error ? err.message : String(err)}`;
+        if (retryBtn) retryBtn.style.display = 'block';
         return;
       }
-      loader.style.display = 'none';
     }
 
     function updateTopBar(tickerData?: Ticker24hrResult) {
@@ -819,12 +892,173 @@ export default function MarketChart() {
     canvas.addEventListener('touchend',   handleTouchEnd);
     window.addEventListener('keydown',    handleKeyDown);
 
-    const symSelect = containerRef.current.querySelector('#symSelect') as HTMLSelectElement;
-    const handleSymChange = (e: Event) => {
-      symbol = (e.target as HTMLSelectElement).value;
-      load();
+    /* ── SYMBOL SEARCH ──────────────────────────────────────────────── */
+    const symSearch = containerRef.current.querySelector('#symSearch') as HTMLInputElement;
+    const symDropdown = containerRef.current.querySelector('#symDropdown') as HTMLElement;
+    const starBtn = containerRef.current.querySelector('#starBtn') as HTMLElement;
+    let tradingSymbols: { symbol: string; base: string; quote: string }[] = [];
+    let symDropdownItems: { symbol: string; base: string; fav: boolean }[] = [];
+    let symDropdownIdx = -1;
+
+    // Favorites — persisted in localStorage
+    function getFavs(): string[] {
+      try { return JSON.parse(localStorage.getItem('trade-hard-favs') || '[]'); }
+      catch { return []; }
+    }
+    function isFav(sym: string): boolean {
+      return getFavs().includes(sym);
+    }
+    function toggleFav(sym: string) {
+      const favs = getFavs();
+      const idx = favs.indexOf(sym);
+      if (idx >= 0) favs.splice(idx, 1);
+      else favs.push(sym);
+      localStorage.setItem('trade-hard-favs', JSON.stringify(favs));
+      updateStarBtn();
+    }
+    function updateStarBtn() {
+      if (starBtn) {
+        starBtn.classList.toggle('starred', isFav(symbol));
+        starBtn.textContent = isFav(symbol) ? '★' : '☆';
+      }
+    }
+
+    // Fetch trading symbols once at init
+    fetchTradingSymbols().then(syms => {
+      tradingSymbols = syms;
+    }).catch(() => { /* fallback to manual entry */ });
+
+    function renderSymDropdown(filter: string) {
+      const q = filter.toUpperCase().trim();
+      const favs = getFavs();
+
+      // Build favorites section first (always shown at top)
+      const favItems = favs
+        .map(sym => {
+          const match = tradingSymbols.find(t => t.symbol === sym);
+          return match ? { symbol: match.symbol, base: match.base, fav: true } : { symbol: sym, base: sym.replace('USDT', ''), fav: true };
+        })
+        .filter(item => !q || item.symbol.includes(q) || item.base.includes(q));
+
+      // Then regular items (excluding favorites)
+      const regularFiltered = q
+        ? tradingSymbols
+            .filter(s => !favs.includes(s.symbol) && (s.symbol.includes(q) || s.base.includes(q)))
+            .slice(0, 50)
+        : tradingSymbols.filter(s => !favs.includes(s.symbol)).slice(0, 50);
+
+      const allItems = [...favItems, ...regularFiltered.map(s => ({ symbol: s.symbol, base: s.base, fav: false }))];
+      symDropdownItems = allItems;
+      symDropdownIdx = -1;
+
+      let html = '';
+      if (favItems.length) {
+        html += '<div class="sym-fav-header">★ Favorites</div>';
+        html += favItems.map((item, i) =>
+          `<div class="sym-item fav" data-symbol="${item.symbol}" data-idx="${i}">
+            <span class="sym-star" data-star="${item.symbol}">★</span>
+            ${item.base}<span class="sym-quote">/USDT</span>
+          </div>`
+        ).join('');
+        if (regularFiltered.length) html += '<div class="sym-sep"></div>';
+      }
+      const offset = favItems.length + (favItems.length && regularFiltered.length ? 1 : 0);
+      html += regularFiltered.map((s, i) =>
+        `<div class="sym-item" data-symbol="${s.symbol}" data-idx="${offset + i}">
+          <span class="sym-star" data-star="${s.symbol}">☆</span>
+          ${s.base}<span class="sym-quote">/USDT</span>
+        </div>`
+      ).join('');
+
+      symDropdown.innerHTML = html;
+      symDropdown.style.display = symDropdownItems.length ? 'block' : 'none';
+    }
+
+    const handleSymSearch = () => {
+      const val = symSearch.value.toUpperCase().trim();
+      if (!val) { renderSymDropdown(''); return; }
+      renderSymDropdown(val);
     };
-    symSelect.addEventListener('change', handleSymChange);
+
+    const handleSymKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        symDropdownIdx = Math.min(symDropdownItems.length - 1, symDropdownIdx + 1);
+        updateSymHighlight();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        symDropdownIdx = Math.max(-1, symDropdownIdx - 1);
+        updateSymHighlight();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (symDropdownIdx >= 0 && symDropdownItems[symDropdownIdx]) {
+          selectSymbol(symDropdownItems[symDropdownIdx].symbol);
+        } else {
+          const val = symSearch.value.toUpperCase().trim();
+          if (val) selectSymbol(val.endsWith('USDT') ? val : val + 'USDT');
+        }
+      } else if (e.key === 'Escape') {
+        symDropdown.style.display = 'none';
+      }
+    };
+
+    function updateSymHighlight() {
+      symDropdown.querySelectorAll('.sym-item').forEach((el, i) => {
+        el.classList.toggle('active', i === symDropdownIdx);
+      });
+      const active = symDropdown.querySelector('.sym-item.active') as HTMLElement;
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    }
+
+    function selectSymbol(sym: string) {
+      symbol = sym;
+      symSearch.value = sym;
+      symDropdown.style.display = 'none';
+      updateStarBtn();
+      load();
+    }
+
+    const handleSymDropdownClick = (e: Event) => {
+      const starEl = (e.target as HTMLElement).closest('.sym-star') as HTMLElement;
+      if (starEl) {
+        e.stopPropagation();
+        const symToToggle = starEl.dataset.star!;
+        toggleFav(symToToggle);
+        renderSymDropdown(symSearch.value);
+        return;
+      }
+      const item = (e.target as HTMLElement).closest('.sym-item') as HTMLElement;
+      if (!item) return;
+      selectSymbol(item.dataset.symbol!);
+    };
+
+    const handleSymFocus = () => {
+      if (tradingSymbols.length) renderSymDropdown(symSearch.value);
+    };
+
+    const handleSymBlur = () => {
+      // Delay to allow click on dropdown item
+      setTimeout(() => { symDropdown.style.display = 'none'; }, 150);
+    };
+
+    symSearch.addEventListener('input', handleSymSearch);
+    symSearch.addEventListener('keydown', handleSymKeydown);
+    symSearch.addEventListener('focus', handleSymFocus);
+    symSearch.addEventListener('blur', handleSymBlur);
+    symDropdown.addEventListener('click', handleSymDropdownClick);
+
+    // Retry button
+    const retryBtnEl = containerRef.current.querySelector('.retry-btn') as HTMLElement;
+    const handleRetry = () => { load(); };
+    retryBtnEl.addEventListener('click', handleRetry);
+
+    // Star button — toggle current symbol as favorite
+    const handleStarClick = () => {
+      toggleFav(symbol);
+      if (symDropdown.style.display === 'block') renderSymDropdown(symSearch.value);
+    };
+    starBtn.addEventListener('click', handleStarClick);
+    updateStarBtn();
 
     const tfGroup = containerRef.current.querySelector('#tfGroup');
     const handleTfClick = (e: Event) => {
@@ -867,10 +1101,17 @@ export default function MarketChart() {
       canvas.removeEventListener('touchmove',  handleTouchMove);
       canvas.removeEventListener('touchend',   handleTouchEnd);
       window.removeEventListener('keydown',    handleKeyDown);
-      symSelect.removeEventListener('change', handleSymChange);
+      symSearch.removeEventListener('input', handleSymSearch);
+      symSearch.removeEventListener('keydown', handleSymKeydown);
+      symSearch.removeEventListener('focus', handleSymFocus);
+      symSearch.removeEventListener('blur', handleSymBlur);
+      symDropdown.removeEventListener('click', handleSymDropdownClick);
+      retryBtnEl.removeEventListener('click', handleRetry);
+      starBtn.removeEventListener('click', handleStarClick);
       tfGroup?.removeEventListener('click',  handleTfClick);
       typeGroup?.removeEventListener('click', handleTypeClick);
       ro.disconnect();
+      closeWebSocket();
     };
   }, []);
 
@@ -881,15 +1122,11 @@ export default function MarketChart() {
         <span className="brand">◈ TRADE-HARD</span>
         <div className="v-sep"></div>
 
-        <select className="sym-select" id="symSelect" defaultValue="BTCUSDT">
-          <option value="BTCUSDT">BTC / USDT</option>
-          <option value="ETHUSDT">ETH / USDT</option>
-          <option value="SOLUSDT">SOL / USDT</option>
-          <option value="BNBUSDT">BNB / USDT</option>
-          <option value="XRPUSDT">XRP / USDT</option>
-          <option value="DOGEUSDT">DOGE / USDT</option>
-          <option value="AVAXUSDT">AVAX / USDT</option>
-        </select>
+        <div className="sym-search-wrap" id="symSearchWrap">
+          <input className="sym-search-input" id="symSearch" type="text" placeholder="Search symbol…" autoComplete="off" defaultValue="BTCUSDT" />
+          <button className="star-btn" id="starBtn" title="Add to favorites">☆</button>
+          <div className="sym-search-dropdown" id="symDropdown"></div>
+        </div>
 
         <div className="tf-group" id="tfGroup">
           <button className="tf-btn" data-tf="1m">1m</button>
@@ -942,6 +1179,7 @@ export default function MarketChart() {
         <div id="loader">
           <div className="ring"></div>
           <div className="loader-txt">Fetching market data…</div>
+          <button className="retry-btn" style={{display:'none'}}>Retry</button>
         </div>
       </div>
 

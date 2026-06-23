@@ -22,6 +22,10 @@ const COLOR_MAP: Record<CdcColor, string> = {
 const emaCache = new Map<string, (number | null)[]>();
 const MAX_CACHE_SIZE = 50;
 
+export function clearCdcCache() {
+  emaCache.clear();
+}
+
 function getCachedEma(cacheKey: string): (number | null)[] | undefined {
   return emaCache.get(cacheKey);
 }
@@ -67,13 +71,14 @@ export const cdcActionZoneIndicator = {
     const fastPeriod = Number(calcParams[0]);
     const slowPeriod = Number(calcParams[1]);
 
-    // Create cache keys based on data hash
+    // Create cache keys based on data hash + indicator name (encodes symbol)
+    const symbolKey = indicator.name || 'default';
     const dataHash = dataList.length > 0 ? 
       `${dataList[0].timestamp}-${dataList[dataList.length - 1].timestamp}-${dataList.length}` : 
       'empty';
     
-    const fastCacheKey = `fast-${dataHash}-${fastPeriod}`;
-    const slowCacheKey = `slow-${dataHash}-${slowPeriod}`;
+    const fastCacheKey = `${symbolKey}-fast-${dataHash}-${fastPeriod}`;
+    const slowCacheKey = `${symbolKey}-slow-${dataHash}-${slowPeriod}`;
 
     // Try to get from cache first
     let fastEma = getCachedEma(fastCacheKey);

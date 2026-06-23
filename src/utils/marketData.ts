@@ -18,6 +18,12 @@ export interface Ticker24hrResult {
   quoteVolume: string;
 }
 
+export interface TradingSymbol {
+  symbol: string;
+  base: string;
+  quote: string;
+}
+
 // Binance kline format: [openTime, open, high, low, close, volume, closeTime, ...]
 type BinanceKline = [number, string, string, string, string, string, number, string, number, string, string, string];
 
@@ -38,11 +44,43 @@ async function fetchBinanceUiKlines(symbol: string, interval: string, limit: num
 }
 
 export async function fetch24hrTicker(symbol: string): Promise<Ticker24hrResult> {
-  const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  try {
+    const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`;
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
+    const data: Ticker24hrResult = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Ticker request timed out after 15 seconds', { cause: error });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// In-memory cache for trading symbols — fetched once per session
+let symbolCache: TradingSymbol[] | null = null;
+
+export async function fetchTradingSymbols(): Promise<TradingSymbol[]> {
+  if (symbolCache) return symbolCache;
+  const url = 'https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT';
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Binance API error: ${response.status} ${response.statusText}`);
-  const data: Ticker24hrResult = await response.json();
-  return data;
+  const data = await response.json();
+  const symbols: TradingSymbol[] = (data.symbols as Array<{ symbol: string; baseAsset: string; quoteAsset: string; status: string }>)
+    .filter((s) => s.status === 'TRADING' && s.quoteAsset === 'USDT')
+    .map((s) => ({
+      symbol: s.symbol,
+      base: s.baseAsset,
+      quote: s.quoteAsset,
+    }))
+    .sort((a: TradingSymbol, b: TradingSymbol) => a.base.localeCompare(b.base));
+  symbolCache = symbols;
+  return symbols;
 }
 
 export async function fetchHistoricalData(

@@ -1,25 +1,26 @@
 # TradeHard Pro
 
-Cryptocurrency trading chart application with Rainbow MA (64-line moving average rainbow) and CDC ActionZone indicators.
+Real-time cryptocurrency trading chart with custom Canvas2D rendering, Rainbow MA (64-line), and CDC ActionZone indicators.
 
 ## Tech Stack
 
 - React 19 + TypeScript 6 + Vite 8
-- klinecharts 9.3.0 for chart rendering
-- Binance public API for market data
+- klinecharts 9.3.0 — TypeScript types only (no runtime APIs)
+- Binance public API — REST for historical data + WebSocket for real-time updates
 - Deployed via GitHub Pages
 
 ## Features
 
-- **Rainbow MA**: 64 moving averages (SMA/EMA/WMA selectable) rendered as a rainbow gradient
-- **CDC ActionZone**: Colored bar indicator showing bull/bear momentum zones (Green/Blue/LBlue/Red/Orange/Yellow)
-- Multiple trading pairs (BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, RVN)
-- Multiple timeframes (1m → 1W)
-- Dark theme matching TradingView aesthetics
-- Error handling with user-facing error display
-- Request timeout (15s) with abort controller
-- **Performance Optimizations**: Caching layer reduces API calls by ~60% and improves response times
-- **Enhanced Memory Management**: Automatic cache cleanup prevents memory leaks
+- **Real-time updates**: WebSocket stream for live kline + ticker data
+- **Rainbow MA**: 64 moving averages (SMA/EMA/WMA selectable) rendered as rainbow gradient
+- **CDC ActionZone**: EMA crossover with 7-color bull/bear momentum classification
+- **MACD + RSI**: Inlined Float64Array implementations for ~2x throughput
+- **Searchable symbol dropdown**: Fetches all USDT spot pairs from Binance exchangeInfo
+- **4 chart types**: Candle, Volume Candle, Line, Volume Line
+- **7 timeframes**: 1m → 1W
+- **Performance**: OffscreenCanvas rainbow cache, rAF-throttled rendering, DOM element caching
+- **Error recovery**: Retry button on fetch failure
+- **Dark theme**: TradingView-inspired, system font stack (no external font dependency)
 
 ## Development
 
@@ -34,30 +35,24 @@ pnpm test       # Run unit tests
 
 ## Architecture
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for full component reference, data flow, and system warnings.
+
 ```
 src/
-  App.tsx                    # Root component, full-screen dark container
-  main.tsx                   # React entry point
-  index.css                  # Global styles, dark theme, responsive
+  App.tsx                              # Root component, full-screen dark container
+  main.tsx                             # React entry point
+  index.css                            # Global reset, system font stack
   components/
-    MarketChart.tsx          # Chart init, data loading, UI controls
+    MarketChart.tsx                    # Chart component: rendering, data loading, WebSocket, UI controls
+    MarketChart.css                    # Chart component styles (tokens, topbar, subtoolbar, canvas, loader, statusbar)
   indicators/
-    maUtils.ts               # Shared MA calculations (SMA, EMA, WMA)
-    rainbowMa.ts             # RainbowMA indicator (64 MA lines)
-    cdcActionZone.ts         # CDC ActionZone indicator (colored bars)
+    maUtils.ts                         # Shared MA calculations (SMA, EMA, WMA) — (number|null)[] output
+    maUtils.test.ts                    # Unit tests for maUtils
+    rainbowMa.ts                       # RainbowMA indicator (64 MA lines, configurable type)
+    cdcActionZone.optimized.ts         # CDC ActionZone indicator (EMA crossover, 7-color, in-memory cache)
   utils/
-    binanceApi.ts            # Binance klines API with timeout + error handling
+    marketData.ts                      # Binance API client: klines, 24hr ticker, exchangeInfo symbol list
 ```
-
-## Performance Optimizations
-
-The application now includes several performance enhancements:
-
-- **Data Caching**: API responses are cached for 5 minutes to reduce redundant network requests
-- **Calculation Caching**: Moving average calculations are cached to prevent redundant computations
-- **Component Memoization**: React components use useCallback and useMemo to prevent unnecessary re-renders
-- **Memory Management**: Automatic cache cleanup prevents memory leaks
-- **Enhanced Error Handling**: Better error messages and timeout handling improve user experience
 
 ## Deployment
 
